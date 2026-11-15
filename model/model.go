@@ -74,12 +74,11 @@ func currentParams(vars []*variable.Variable) map[string]float64 {
 }
 
 func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
-	if iterations <= 0 || burnIn <= 0 {
-		return nil, errors.New("invalid iterations or burn-in period parameter")
+	if iterations <= 0 {
+		return nil, errors.New("iterations must be positive")
 	}
-
-	if iterations <= burnIn {
-		return nil, errors.New("burn-in period cannot be greater than iterations")
+	if burnIn < 0 {
+		return nil, errors.New("burn-in period cannot be negative")
 	}
 
 	samples := make([]map[string]float64, iterations)
