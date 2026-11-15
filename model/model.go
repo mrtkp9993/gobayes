@@ -46,31 +46,18 @@ func (m *Model) propose() (map[string]float64, float64) {
 	return proposal, logPrior
 }
 
-func (m *Model) accept(proposal map[string]float64, lp float64) bool {
+func (m *Model) accept(proposal map[string]float64, lp, curr float64) (bool, float64) {
 	proposalLogRatio := 0.0
 	if val, ok := proposal["__proposalLogRatio"]; ok {
 		proposalLogRatio = val
 		delete(proposal, "__proposalLogRatio")
 	}
-	llProp := m.LogLik(proposal)
-	llCurr := m.LogLik(currentParams(m.Variables))
-	lpCurr := 0.0
-	for _, v := range m.Variables {
-		lpCurr += v.Prior.LogProb(v.Value)
-	}
-	logA := llProp + lp - (llCurr + lpCurr) + proposalLogRatio
+	lpProp := m.LogLik(proposal) + lp
+	logA := lpProp - curr + proposalLogRatio
 	if logA >= 0 {
-		return true
+		return true, lpProp
 	}
-	return rand.Float64() < math.Exp(logA)
-}
-
-func currentParams(vars []*variable.Variable) map[string]float64 {
-	params := make(map[string]float64)
-	for _, v := range vars {
-		params[v.Name] = v.Value
-	}
-	return params
+	return rand.Float64() < math.Exp(logA), lpProp
 }
 
 func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
@@ -82,12 +69,14 @@ func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
 	}
 
 	samples := make([]map[string]float64, iterations)
+	curr := m.logPosterior()
 	for i := 0; i < iterations+burnIn; i++ {
 		proposal, lpProp := m.propose()
-		if m.accept(proposal, lpProp) {
+		if ok, lpNew := m.accept(proposal, lpProp, curr); ok {
 			for _, v := range m.Variables {
 				v.Value = proposal[v.Name]
 			}
+			curr = lpNew
 		}
 
 		if i >= burnIn {
