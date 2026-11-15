@@ -13,51 +13,40 @@ type Model struct {
 	LogLik    func(params map[string]float64) float64
 }
 
-func (m *Model) logPosterior() float64 {
-	params := make(map[string]float64)
+func (m *Model) initialState() Proposal {
+	s := Proposal{Params: make(map[string]float64, len(m.Variables))}
 	for _, v := range m.Variables {
-		params[v.Name] = v.Value
+		s.Params[v.Name] = v.Value
+		s.LogPrior += v.Prior.LogProb(v.Value)
 	}
-	ll := m.LogLik(params)
-	lp := 0.0
-	for _, v := range m.Variables {
-		lp += v.Prior.LogProb(v.Value)
-	}
-	return ll + lp
+	s.LogLik = m.LogLik(s.Params)
+	return s
 }
 
-func (m *Model) propose() (map[string]float64, float64) {
-	proposal := make(map[string]float64)
-	logPrior := 0.0
-	proposalLogRatio := 0.0
+func (m *Model) propose() Proposal {
+	p := Proposal{Params: make(map[string]float64, len(m.Variables))}
 	for _, v := range m.Variables {
 		var newVal float64
 		if v.Multiplicative {
 			factor := math.Exp(v.ProposalScale * rand.NormFloat64())
 			newVal = v.Value * factor
-			proposalLogRatio += math.Log(factor)
+			p.LogQRatio += math.Log(factor)
 		} else {
 			newVal = v.Value + v.ProposalScale*rand.NormFloat64()
 		}
-		proposal[v.Name] = newVal
-		logPrior += v.Prior.LogProb(newVal)
+		p.Params[v.Name] = newVal
+		p.LogPrior += v.Prior.LogProb(newVal)
 	}
-	proposal["__proposalLogRatio"] = proposalLogRatio
-	return proposal, logPrior
+	return p
 }
 
-func (m *Model) accept(proposal map[string]float64, lp, curr float64) (bool, float64) {
-	proposalLogRatio := 0.0
-	if val, ok := proposal["__proposalLogRatio"]; ok {
-		proposalLogRatio = val
-		delete(proposal, "__proposalLogRatio")
+func (m *Model) accept(p *Proposal, curr Proposal) bool {
+	p.LogLik = m.LogLik(p.Params)
+	logA := p.LogPosterior() - curr.LogPosterior() + p.LogQRatio
+	if math.IsNaN(logA) {
+		return false
 	}
-	lpProp := m.LogLik(proposal) + lp
-	logA := lpProp - curr + proposalLogRatio
-	if logA >= 0 {
-		return true, lpProp
-	}
-	return rand.Float64() < math.Exp(logA), lpProp
+	return logA >= 0 || math.Log(rand.Float64()) < logA
 }
 
 func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
@@ -68,15 +57,19 @@ func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
 		return nil, errors.New("burn-in period cannot be negative")
 	}
 
+	curr := m.initialState()
+	if lp := curr.LogPosterior(); math.IsInf(lp, -1) || math.IsNaN(lp) {
+		return nil, errors.New("initial values have zero posterior density (log-posterior is -Inf or NaN)")
+	}
+
 	samples := make([]map[string]float64, iterations)
-	curr := m.logPosterior()
 	for i := 0; i < iterations+burnIn; i++ {
-		proposal, lpProp := m.propose()
-		if ok, lpNew := m.accept(proposal, lpProp, curr); ok {
+		prop := m.propose()
+		if m.accept(&prop, curr) {
 			for _, v := range m.Variables {
-				v.Value = proposal[v.Name]
+				v.Value = prop.Params[v.Name]
 			}
-			curr = lpNew
+			curr = prop
 		}
 
 		if i >= burnIn {
