@@ -11,8 +11,18 @@ type Gamma struct {
 }
 
 func (g Gamma) LogProb(x float64) float64 {
-	if x <= 0 {
+	if g.Alpha <= 0 || g.Beta <= 0 || x < 0 {
 		return math.Inf(-1)
+	}
+	if x == 0 {
+		switch {
+		case g.Alpha < 1:
+			return math.Inf(1)
+		case g.Alpha == 1:
+			return math.Log(g.Beta)
+		default:
+			return math.Inf(-1)
+		}
 	}
 
 	lgamma, _ := math.Lgamma(g.Alpha)

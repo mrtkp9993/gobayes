@@ -1,0 +1,84 @@
+version: "3"
+
+vars:
+  EXAMPLES:
+    sh: go list ./examples/...
+
+tasks:
+  default:
+    desc: Görevleri listeler
+    cmds:
+      - task --list
+    silent: true
+
+  test:
+    desc: Tüm testleri çalıştırır
+    cmds:
+      - go test -count=1 ./...
+
+  test:v:
+    desc: Testleri ayrıntılı çıktıyla çalıştırır
+    cmds:
+      - go test -count=1 -v ./...
+
+  cover:
+    desc: Kapsam raporunu üretir ve fonksiyon bazında yazdırır
+    cmds:
+      - go test -count=1 -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out
+
+  cover:html:
+    desc: Kapsam raporunu tarayıcıda açar
+    deps: [cover]
+    cmds:
+      - go tool cover -html=coverage.out
+
+  vet:
+    desc: go vet çalıştırır
+    cmds:
+      - go vet ./...
+
+  fmt:
+    desc: Kodu gofmt ile biçimlendirir
+    cmds:
+      - gofmt -w .
+
+  fmt:check:
+    desc: Biçimlendirilmemiş dosyaları listeler
+    cmds:
+      - gofmt -l .
+
+  build:
+    desc: Tüm paketleri derler
+    cmds:
+      - go build ./...
+
+  tidy:
+    desc: go.mod dosyasını düzenler
+    cmds:
+      - go mod tidy
+
+  examples:
+    desc: Tüm örnekleri sırayla çalıştırır
+    cmds:
+      - for: { var: EXAMPLES }
+        cmd: go run {{.ITEM}}
+
+  example:
+    desc: "Tek bir örneği çalıştırır"
+    requires:
+      vars: [CLI_ARGS]
+    cmds:
+      - go run ./examples/{{.CLI_ARGS}}
+
+  check:
+    desc: vet + test
+    cmds:
+      - task: vet
+      - task: test
+
+  all:
+    desc: vet, test ve tüm örnekler
+    cmds:
+      - task: check
+      - task: examples
