@@ -4,26 +4,27 @@ import (
 	"fmt"
 	"math"
 	"testing"
+
+	"github.com/mrtkp9993/gobayes/internal/disttest"
 )
 
 func TestUniformLogProb(t *testing.T) {
 	t.Run("A=0,B=1", func(t *testing.T) {
-		runLogProbCases(t, Uniform{A: 0, B: 1}, []logProbCase{
-			{"x=0.3", 0.3, 0.0},
-			{"x<A", -0.1, math.Inf(-1)},
-			{"x>B", 1.1, math.Inf(-1)},
+		disttest.RunLogProbCases(t, Uniform{A: 0, B: 1}, []disttest.LogProbCase{
+			{Name: "x=0.3", X: 0.3, Want: 0.0},
+			{Name: "x<A", X: -0.1, Want: math.Inf(-1)},
+			{Name: "x>B", X: 1.1, Want: math.Inf(-1)},
 		})
 	})
 	t.Run("A=-3,B=2", func(t *testing.T) {
-		runLogProbCases(t, Uniform{A: -3, B: 2}, []logProbCase{
-			{"x=-1", -1, -1.6094379124341003},
+		disttest.RunLogProbCases(t, Uniform{A: -3, B: 2}, []disttest.LogProbCase{
+			{Name: "x=-1", X: -1, Want: -1.6094379124341003},
 		})
 	})
 	t.Run("A=2,B=6 boundaries", func(t *testing.T) {
-		// scipy.stats.uniform kapalı aralık [A, B] üzerinde yoğunluk veriyor.
-		runLogProbCases(t, Uniform{A: 2, B: 6}, []logProbCase{
-			{"x=A", 2, -1.3862943611198906},
-			{"x=B", 6, -1.3862943611198906},
+		disttest.RunLogProbCases(t, Uniform{A: 2, B: 6}, []disttest.LogProbCase{
+			{Name: "x=A", X: 2, Want: -1.3862943611198906},
+			{Name: "x=B", X: 6, Want: -1.3862943611198906},
 		})
 	})
 }
@@ -32,7 +33,7 @@ func TestUniformLogProbInvalidParams(t *testing.T) {
 	for _, p := range []Uniform{{1, 1}, {3, 1}} {
 		t.Run(fmt.Sprintf("A=%v,B=%v", p.A, p.B), func(t *testing.T) {
 			for _, x := range []float64{1, 2} {
-				assertClose(t, p.LogProb(x), math.Inf(-1), fmt.Sprintf("x=%v", x))
+				disttest.AssertClose(t, p.LogProb(x), math.Inf(-1), fmt.Sprintf("x=%v", x))
 			}
 		})
 	}
@@ -41,15 +42,28 @@ func TestUniformLogProbInvalidParams(t *testing.T) {
 func TestUniformSample(t *testing.T) {
 	for _, d := range []Uniform{{0, 1}, {-3, 2}, {10, 10.5}} {
 		t.Run(fmt.Sprintf("A=%v,B=%v", d.A, d.B), func(t *testing.T) {
-			xs := drawSamples(t, d, nSamples, func(x float64) bool { return x >= d.A && x <= d.B })
+			xs := disttest.DrawSamples(t, d, disttest.NSamples, func(x float64) bool { return x >= d.A && x <= d.B })
 			w := d.B - d.A
-			checkMoments(t, xs, (d.A+d.B)/2, w*w/12)
+
+			disttest.CheckStats(t, d, xs, disttest.TheoreticalStats{
+				Mean: (d.A + d.B) / 2, Median: (d.A + d.B) / 2, Var: w * w / 12,
+				MAD:  w / 4,
+				Skew: 0, ExKurt: -1.2,
+			})
+		})
+	}
+}
+
+func TestUniformIntegratesToOne(t *testing.T) {
+	for _, d := range []Uniform{{0, 1}, {-3, 2}, {10, 10.5}} {
+		t.Run(fmt.Sprintf("A=%v,B=%v", d.A, d.B), func(t *testing.T) {
+			disttest.CheckIntegral(t, disttest.IntegrateFinite(t, d, d.A, d.B))
 		})
 	}
 }
 
 func TestUniformSampleInvalidParamsPanics(t *testing.T) {
 	for _, p := range []Uniform{{1, 1}, {3, 1}} {
-		assertPanics(t, func() { p.Sample() }, fmt.Sprintf("A=%v,B=%v", p.A, p.B))
+		disttest.AssertPanics(t, func() { p.Sample() }, fmt.Sprintf("A=%v,B=%v", p.A, p.B))
 	}
 }
