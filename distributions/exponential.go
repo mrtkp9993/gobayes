@@ -1,9 +1,9 @@
-// NOT TESTED YET
 package distributions
 
 import (
 	"math"
-	"math/rand/v2"
+
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 type Exponential struct {
@@ -21,5 +21,5 @@ func (e Exponential) Sample() float64 {
 	if e.Lambda <= 0 {
 		panic("exponential lambda must be positive")
 	}
-	return -math.Log(1-rand.Float64()) / e.Lambda
+	return -math.Log(1-random.Float64()) / e.Lambda
 }

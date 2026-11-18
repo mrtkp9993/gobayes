@@ -2,7 +2,8 @@ package distributions
 
 import (
 	"math"
-	"math/rand/v2"
+
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 type Normal struct {
@@ -21,5 +22,5 @@ func (n Normal) Sample() float64 {
 	if n.Sigma <= 0 {
 		panic("sigma must be positive")
 	}
-	return n.Mu + n.Sigma*rand.NormFloat64()
+	return n.Mu + n.Sigma*random.NormFloat64()
 }

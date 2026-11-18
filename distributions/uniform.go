@@ -1,9 +1,9 @@
-// NOT TESTED YET
 package distributions
 
 import (
 	"math"
-	"math/rand/v2"
+
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 type Uniform struct {
@@ -21,5 +21,5 @@ func (u Uniform) Sample() float64 {
 	if u.B <= u.A {
 		panic("uniform requires A < B")
 	}
-	return u.A + rand.Float64()*(u.B-u.A)
+	return u.A + random.Float64()*(u.B-u.A)
 }

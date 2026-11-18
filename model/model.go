@@ -3,14 +3,15 @@ package model
 import (
 	"errors"
 	"math"
-	"math/rand/v2"
 
+	"github.com/mrtkp9993/gobayes/random"
 	"github.com/mrtkp9993/gobayes/variable"
 )
 
 type Model struct {
 	Variables []*variable.Variable
 	LogLik    func(params map[string]float64) float64
+	Seed      uint64
 }
 
 func (m *Model) initialState() Proposal {
@@ -28,11 +29,11 @@ func (m *Model) propose() Proposal {
 	for _, v := range m.Variables {
 		var newVal float64
 		if v.Multiplicative {
-			factor := math.Exp(v.ProposalScale * rand.NormFloat64())
+			factor := math.Exp(v.ProposalScale * random.NormFloat64())
 			newVal = v.Value * factor
 			p.LogQRatio += math.Log(factor)
 		} else {
-			newVal = v.Value + v.ProposalScale*rand.NormFloat64()
+			newVal = v.Value + v.ProposalScale*random.NormFloat64()
 		}
 		p.Params[v.Name] = newVal
 		p.LogPrior += v.Prior.LogProb(newVal)
@@ -46,7 +47,7 @@ func (m *Model) accept(p *Proposal, curr Proposal) bool {
 	if math.IsNaN(logA) {
 		return false
 	}
-	return logA >= 0 || math.Log(rand.Float64()) < logA
+	return logA >= 0 || math.Log(random.Float64()) < logA
 }
 
 func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
@@ -55,6 +56,9 @@ func (m *Model) RunMCMC(iterations, burnIn int) ([]map[string]float64, error) {
 	}
 	if burnIn < 0 {
 		return nil, errors.New("burn-in period cannot be negative")
+	}
+	if m.Seed != 0 {
+		random.Seed(m.Seed)
 	}
 
 	curr := m.initialState()

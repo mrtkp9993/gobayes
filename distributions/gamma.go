@@ -2,7 +2,8 @@ package distributions
 
 import (
 	"math"
-	"math/rand/v2"
+
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 type Gamma struct {
@@ -37,20 +38,20 @@ func (g Gamma) Sample() float64 {
 	}
 	if alpha < 1 {
 		x := Gamma{Alpha: alpha + 1, Beta: beta}.Sample()
-		u := rand.Float64()
+		u := random.Float64()
 		return x * math.Pow(u, 1/alpha)
 	}
 
 	d := alpha - 1.0/3.0
 	c := 1.0 / math.Sqrt(9.0*d)
 	for {
-		x := rand.NormFloat64()
+		x := random.NormFloat64()
 		v := 1 + c*x
 		if v <= 0 {
 			continue
 		}
 		v = v * v * v
-		u := rand.Float64()
+		u := random.Float64()
 
 		if u < 1-0.0331*math.Pow(x, 4) {
 			return d * v / beta
