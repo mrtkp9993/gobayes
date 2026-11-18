@@ -42,6 +42,9 @@ func (m *Model) propose() Proposal {
 }
 
 func (m *Model) accept(p *Proposal, curr Proposal) bool {
+	if math.IsInf(p.LogPrior, -1) || math.IsNaN(p.LogPrior) {
+		return false
+	}
 	p.LogLik = m.LogLik(p.Params)
 	logA := p.LogPosterior() - curr.LogPosterior() + p.LogQRatio
 	if math.IsNaN(logA) {

@@ -157,6 +157,27 @@ func TestSeedReproducible(t *testing.T) {
 	}
 }
 
+func TestNoLogLikCallOutsidePriorSupport(t *testing.T) {
+	theta := &variable.Variable{Name: "theta", Value: 0.5, Prior: distributions.Uniform{A: 0, B: 1}, ProposalScale: 2}
+	outside := 0
+	m := &Model{
+		Variables: []*variable.Variable{theta},
+		LogLik: func(p map[string]float64) float64 {
+			if th := p["theta"]; th < 0 || th > 1 {
+				outside++
+			}
+			return 0
+		},
+		Seed: testSeed,
+	}
+	if _, err := m.RunMCMC(2000, 0); err != nil {
+		t.Fatal(err)
+	}
+	if outside > 0 {
+		t.Errorf("LogLik called %d times with theta outside the prior support", outside)
+	}
+}
+
 func TestRunMCMCArgumentErrors(t *testing.T) {
 	m, _ := simpleModel(testSeed)
 	for _, c := range []struct{ iters, burn int }{{0, 0}, {-1, 0}, {10, -1}} {
