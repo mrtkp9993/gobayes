@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	"github.com/mrtkp9993/gobayes/internal/exampleutil"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -37,22 +38,23 @@ func main() {
 		}
 		return ll
 	}
-	model := &model.Model{
+	m := &model.Model{
 		Variables: []*variable.Variable{alpha, beta},
 		LogLik:    likelihood,
 	}
-	samples, err := model.RunMCMC(20000, 2000)
+	result, err := m.Run(model.Options{Iterations: 20000, BurnIn: 2000})
 	if err != nil {
 		panic(err)
 	}
 	// Compute posterior means
 	sumAlpha := 0.0
 	sumBeta := 0.0
-	for _, s := range samples {
-		sumAlpha += s["alpha"]
-		sumBeta += s["beta"]
+	for i, alpha := range result.Draws[0][0] {
+		sumAlpha += alpha
+		sumBeta += result.Draws[0][1][i]
 	}
-	meanAlpha := sumAlpha / float64(len(samples))
-	meanBeta := sumBeta / float64(len(samples))
+	meanAlpha := sumAlpha / float64(len(result.Draws[0][0]))
+	meanBeta := sumBeta / float64(len(result.Draws[0][0]))
 	fmt.Printf("Posterior mean of α ≈ %.4f, β ≈ %.4f\n", meanAlpha, meanBeta)
+	exampleutil.PrintDiagnostics(result)
 }

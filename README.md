@@ -1,7 +1,5 @@
 # GoBayes
 
-NOT USE FOR PRODUCTION - EDUCATIONAL PURPOSES ONLY
-
 A Go library for Bayesian inference using Markov Chain Monte Carlo (MCMC).
 
 ## Installation

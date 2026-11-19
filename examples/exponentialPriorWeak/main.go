@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	"github.com/mrtkp9993/gobayes/internal/exampleutil"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -43,19 +44,20 @@ func main() {
 		Variables: []*variable.Variable{lambda},
 		LogLik:    likelihood,
 	}
-	samples, err := m.RunMCMC(400000, 20000)
+	result, err := m.Run(model.Options{Iterations: 400000, BurnIn: 20000})
 	if err != nil {
 		panic(err)
 	}
 	sum, sumSq := 0.0, 0.0
-	for _, s := range samples {
-		sum += s["lambda"]
-		sumSq += s["lambda"] * s["lambda"]
+	for _, s := range result.Draws[0][0] {
+		sum += s
+		sumSq += s * s
 	}
-	n := float64(len(samples))
+	n := float64(len(result.Draws[0][0]))
 	mean := sum / n
 	sd := math.Sqrt(sumSq/n - mean*mean)
 	bPost := b + T
 	fmt.Printf("Posterior mean of λ ≈ %.7f (exact 3/%.2f = %.7f)\n", mean, bPost, 3/bPost)
 	fmt.Printf("Posterior sd of λ   ≈ %.7f (exact √3/%.2f = %.7f)\n", sd, bPost, math.Sqrt(3)/bPost)
+	exampleutil.PrintDiagnostics(result)
 }

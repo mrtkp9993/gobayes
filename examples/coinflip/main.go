@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	"github.com/mrtkp9993/gobayes/internal/exampleutil"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -29,20 +30,21 @@ func main() {
 		return float64(heads)*math.Log(t) + float64(tails)*math.Log(1.0-t)
 	}
 
-	model := &model.Model{
+	m := &model.Model{
 		Variables: []*variable.Variable{theta},
 		LogLik:    likelihood,
 	}
 
-	samples, err := model.RunMCMC(10000, 1000)
+	result, err := m.Run(model.Options{Iterations: 10000, BurnIn: 1000})
 	if err != nil {
 		panic(err)
 	}
 
 	sum := 0.0
-	for _, s := range samples {
-		sum += s["theta"]
+	for _, s := range result.Draws[0][0] {
+		sum += s
 	}
-	mean := sum / float64(len(samples))
+	mean := sum / float64(len(result.Draws[0][0]))
 	fmt.Printf("Posterior mean of θ ≈ %.4f\n", mean)
+	exampleutil.PrintDiagnostics(result)
 }

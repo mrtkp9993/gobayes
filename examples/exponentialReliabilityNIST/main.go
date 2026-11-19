@@ -17,6 +17,7 @@ import (
 	"sort"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	"github.com/mrtkp9993/gobayes/internal/exampleutil"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -50,23 +51,24 @@ func main() {
 		Variables: []*variable.Variable{lambda},
 		LogLik:    likelihood,
 	}
-	samples, err := m.RunMCMC(400000, 20000)
+	result, err := m.Run(model.Options{Iterations: 400000, BurnIn: 20000})
 	if err != nil {
 		panic(err)
 	}
 
-	mtbf := make([]float64, len(samples))
+	mtbf := make([]float64, len(result.Draws[0][0]))
 	sumLambda := 0.0
-	for i, s := range samples {
-		sumLambda += s["lambda"]
-		mtbf[i] = 1 / s["lambda"]
+	for i, s := range result.Draws[0][0] {
+		sumLambda += s
+		mtbf[i] = 1 / s
 	}
 	sort.Float64s(mtbf)
 	q := func(p float64) float64 { return mtbf[int(p*float64(len(mtbf)-1))] }
 
-	fmt.Printf("Posterior mean of λ ≈ %.6f (exact 4/3309 = %.6f)\n", sumLambda/float64(len(samples)), 4.0/3309.0)
+	fmt.Printf("Posterior mean of λ ≈ %.6f (exact 4/3309 = %.6f)\n", sumLambda/float64(len(result.Draws[0][0])), 4.0/3309.0)
 	fmt.Printf("MTBF 90%% lower bound ≈ %.0f h (NIST: 495)\n", q(0.10))
 	fmt.Printf("MTBF 80%% lower bound ≈ %.0f h (NIST: 600)\n", q(0.20))
 	fmt.Printf("MTBF median          ≈ %.0f h (NIST: 901)\n", q(0.50))
 	fmt.Printf("MTBF 10%% lower bound ≈ %.0f h (NIST: 1897)\n", q(0.90))
+	exampleutil.PrintDiagnostics(result)
 }

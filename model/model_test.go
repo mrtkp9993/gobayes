@@ -2,11 +2,29 @@ package model
 
 import (
 	"math"
+	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/mrtkp9993/gobayes/distributions"
 	"github.com/mrtkp9993/gobayes/variable"
 )
+
+func TestValidateReportsMultipleErrors(t *testing.T) {
+	v := &variable.Variable{Name: "x", Value: math.NaN(), ProposalScale: math.Inf(1)}
+	m := &Model{Variables: []*variable.Variable{nil, v, {Name: "x", Value: 0, Prior: distributions.Normal{Sigma: 1}, ProposalScale: 1, Multiplicative: true}}}
+	_, err := m.Run(Options{Iterations: -1})
+	if err == nil {
+		t.Fatal("expected validation errors")
+	}
+	for _, want := range []string{"LogLik is nil", "variable 0 is nil", "Prior is nil", "ProposalScale", "Value must be finite", "duplicate", "multiplicative", "invalid Iterations"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in %v", want, err)
+		}
+	}
+}
 
 const (
 	testIters  = 50_000
@@ -16,17 +34,17 @@ const (
 	mcseTol    = 5.0
 )
 
-func draws(t *testing.T, m *Model, name string) []float64 {
+func draws(t *testing.T, m *Model, name string, seed uint64) []float64 {
 	t.Helper()
-	samples, err := m.RunMCMC(testIters, testBurnIn)
+	r, err := m.Run(Options{Iterations: testIters, BurnIn: testBurnIn, Seed: seed})
 	if err != nil {
-		t.Fatalf("RunMCMC: %v", err)
+		t.Fatal(err)
 	}
-	xs := make([]float64, len(samples))
-	for i, s := range samples {
-		xs[i] = s[name]
+	xs, err := r.Column(name)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return xs
+	return xs[0]
 }
 
 func batchMeans(xs []float64, f func(float64) float64) (mean, mcse float64) {
@@ -73,10 +91,9 @@ func TestConjugateBetaBinomial(t *testing.T) {
 			}
 			return k*math.Log(th) + (n-k)*math.Log(1-th)
 		},
-		Seed: testSeed,
 	}
 	a, b := 1+k, 1+n-k
-	checkPosterior(t, draws(t, m, "theta"), a/(a+b), a*b/((a+b)*(a+b)*(a+b+1)))
+	checkPosterior(t, draws(t, m, "theta", testSeed), a/(a+b), a*b/((a+b)*(a+b)*(a+b+1)))
 }
 
 func TestConjugateGammaExponential(t *testing.T) {
@@ -94,10 +111,9 @@ func TestConjugateGammaExponential(t *testing.T) {
 			}
 			return r*math.Log(l) - l*T
 		},
-		Seed: testSeed,
 	}
 	a, b := 4.0, 3309.0
-	checkPosterior(t, draws(t, m, "lambda"), a/b, a/(b*b))
+	checkPosterior(t, draws(t, m, "lambda", testSeed), a/b, a/(b*b))
 }
 
 func TestConjugateNormalNormal(t *testing.T) {
@@ -114,7 +130,6 @@ func TestConjugateNormalNormal(t *testing.T) {
 			}
 			return ll
 		},
-		Seed: testSeed,
 	}
 	var sum float64
 	for _, x := range data {
@@ -122,22 +137,21 @@ func TestConjugateNormalNormal(t *testing.T) {
 	}
 	prec := 1/(tau0*tau0) + float64(len(data))/(sigma*sigma)
 	postMean := (mu0/(tau0*tau0) + sum/(sigma*sigma)) / prec
-	checkPosterior(t, draws(t, m, "mu"), postMean, 1/prec)
+	checkPosterior(t, draws(t, m, "mu", testSeed), postMean, 1/prec)
 }
 
-func simpleModel(seed uint64) (*Model, *variable.Variable) {
+func simpleModel() (*Model, *variable.Variable) {
 	v := &variable.Variable{Name: "mu", Value: 0, Prior: distributions.Normal{Mu: 0, Sigma: 10}, ProposalScale: 1}
 	return &Model{
 		Variables: []*variable.Variable{v},
 		LogLik:    func(p map[string]float64) float64 { return distributions.Normal{Mu: p["mu"], Sigma: 1}.LogProb(2) },
-		Seed:      seed,
 	}, v
 }
 
 func TestSeedReproducible(t *testing.T) {
 	run := func(seed uint64) []float64 {
-		m, _ := simpleModel(seed)
-		return draws(t, m, "mu")
+		m, _ := simpleModel()
+		return draws(t, m, "mu", seed)
 	}
 	a, b, c := run(42), run(42), run(7)
 	for i := range a {
@@ -157,6 +171,197 @@ func TestSeedReproducible(t *testing.T) {
 	}
 }
 
+func TestRunKeepsInitialValue(t *testing.T) {
+	m, v := simpleModel()
+	initial := v.Value
+	samples, err := m.Run(Options{Iterations: 100, BurnIn: 10, Seed: testSeed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.Value != initial {
+		t.Fatalf("initial value changed: got %v, want %v", v.Value, initial)
+	}
+	moved := false
+	for _, sample := range samples.Draws[0][0] {
+		if sample != initial {
+			moved = true
+			break
+		}
+	}
+	if !moved {
+		t.Fatal("chain did not move from its initial value")
+	}
+}
+
+func TestParallelRunsReproducible(t *testing.T) {
+	m, _ := simpleModel()
+	want, err := m.Run(Options{Iterations: 1000, BurnIn: 100, Seed: testSeed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const chains = 4
+	results := make([]*Result, chains)
+	errs := make([]error, chains)
+	var wg sync.WaitGroup
+	for i := range results {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			results[i], errs[i] = m.Run(Options{Iterations: 1000, BurnIn: 100, Seed: testSeed})
+		}(i)
+	}
+	wg.Wait()
+	for i := range results {
+		if errs[i] != nil {
+			t.Fatalf("chain %d: %v", i, errs[i])
+		}
+		if !reflect.DeepEqual(results[i], want) {
+			t.Errorf("chain %d differs from sequential run", i)
+		}
+	}
+}
+
+func TestRunMultipleChainsAndThin(t *testing.T) {
+	m, _ := simpleModel()
+	o := Options{Iterations: 40, BurnIn: 10, Thin: 3, Chains: 3, Seed: testSeed}
+	r, err := m.Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := m.Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(r, again) {
+		t.Fatal("runs with the same seed differ")
+	}
+	if reflect.DeepEqual(r.Draws[0], r.Draws[1]) {
+		t.Fatal("independent streams produced identical chains")
+	}
+	col, err := r.Column("mu")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for c := range r.Draws {
+		if len(r.Draws[c]) != len(r.Names) || len(col[c]) != o.Iterations {
+			t.Fatal("wrong number of draws")
+		}
+		for i := range col[c] {
+			if col[c][i] != r.Draws[c][0][i] {
+				t.Fatal("incorrect column")
+			}
+		}
+		if r.AcceptRate()[c] < 0 || r.AcceptRate()[c] > 1 {
+			t.Fatal("invalid acceptance rate")
+		}
+	}
+	if _, err := r.Column("missing"); err == nil {
+		t.Fatal("expected unknown column error")
+	}
+	full, err := m.Run(Options{Iterations: o.Iterations * o.Thin, BurnIn: o.BurnIn, Seed: o.Seed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range r.Draws[0][0] {
+		if r.Draws[0][0][i] != full.Draws[0][0][(i+1)*o.Thin-1] {
+			t.Fatal("thinning selected wrong draw")
+		}
+	}
+}
+
+func TestDrawLayoutAndColumnView(t *testing.T) {
+	m := &Model{Variables: []*variable.Variable{
+		{Name: "x", Value: 0, Prior: distributions.Normal{Sigma: 1}, ProposalScale: 1},
+		{Name: "y", Value: 0, Prior: distributions.Normal{Sigma: 1}, ProposalScale: 1},
+	}, LogLik: func(map[string]float64) float64 { return 0 }}
+	r, err := m.Run(Options{Iterations: 20, Chains: 2, Seed: 42})
+	if err != nil {
+		t.Fatal(err)
+	}
+	col, err := r.Column("y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for c := range r.Draws {
+		if len(r.Draws[c]) != 2 || len(col[c]) != 20 {
+			t.Fatal("incorrect draw dimensions")
+		}
+		col[c][0] = 123
+		if r.Draws[c][1][0] != 123 {
+			t.Fatal("column is not a view")
+		}
+		if cap(r.Draws[c][0]) != 20 {
+			t.Fatal("variable slice exposes adjacent storage")
+		}
+	}
+}
+
+func TestJointAdaptationStopsAfterBurnIn(t *testing.T) {
+	m, v := simpleModel()
+	o := Options{Iterations: 50, BurnIn: 200, Seed: testSeed, Adapt: true}
+	r, err := m.Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Scales[0][0] == v.ProposalScale {
+		t.Fatal("scale did not adapt")
+	}
+	o.Iterations = 500
+	longer, err := m.Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Scales[0][0] != longer.Scales[0][0] {
+		t.Fatal("scale changed after burn-in")
+	}
+	if v.ProposalScale != 1 {
+		t.Fatal("model scale was modified")
+	}
+	o.TargetAccept = 1
+	if _, err := m.Run(o); err == nil {
+		t.Fatal("expected invalid target error")
+	}
+}
+
+func TestChainDiagnostics(t *testing.T) {
+	v := &variable.Variable{Name: "x", Value: 0.5, Prior: distributions.Uniform{A: 0, B: 1}, ProposalScale: 2}
+	m := &Model{Variables: []*variable.Variable{v}, LogLik: func(p map[string]float64) float64 {
+		if p["x"] < 0.25 {
+			return math.NaN()
+		}
+		if p["x"] > 0.75 {
+			return math.Inf(-1)
+		}
+		return 0
+	}}
+	r, err := m.Run(Options{Iterations: 500, BurnIn: 100, Thin: 2, Seed: testSeed})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := r.Diagnostics[0]
+	if d.Proposed != 1000 || d.Accepted+d.RejectedPrior+d.RejectedNonFinite+d.RejectedProbability != d.Proposed {
+		t.Fatalf("incorrect diagnostics: %+v", d)
+	}
+	if d.Accepted == 0 || d.RejectedPrior == 0 || d.RejectedNonFinite == 0 || d.RejectedProbability == 0 {
+		t.Fatalf("expected each decision category: %+v", d)
+	}
+}
+
+func TestInitialStateValidatedBeforeChains(t *testing.T) {
+	var calls atomic.Int64
+	v := &variable.Variable{Name: "x", Value: 0, Prior: distributions.Normal{Sigma: 1}, ProposalScale: 1}
+	m := &Model{Variables: []*variable.Variable{v}, LogLik: func(map[string]float64) float64 {
+		calls.Add(1)
+		return math.Inf(-1)
+	}}
+	if _, err := m.Run(Options{Iterations: 10, Chains: 4}); err == nil {
+		t.Fatal("expected invalid initial state")
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("likelihood called %d times, want 1", calls.Load())
+	}
+}
+
 func TestNoLogLikCallOutsidePriorSupport(t *testing.T) {
 	theta := &variable.Variable{Name: "theta", Value: 0.5, Prior: distributions.Uniform{A: 0, B: 1}, ProposalScale: 2}
 	outside := 0
@@ -168,9 +373,8 @@ func TestNoLogLikCallOutsidePriorSupport(t *testing.T) {
 			}
 			return 0
 		},
-		Seed: testSeed,
 	}
-	if _, err := m.RunMCMC(2000, 0); err != nil {
+	if _, err := m.Run(Options{Iterations: 2000, Seed: testSeed}); err != nil {
 		t.Fatal(err)
 	}
 	if outside > 0 {
@@ -178,11 +382,11 @@ func TestNoLogLikCallOutsidePriorSupport(t *testing.T) {
 	}
 }
 
-func TestRunMCMCArgumentErrors(t *testing.T) {
-	m, _ := simpleModel(testSeed)
+func TestRunArgumentErrors(t *testing.T) {
+	m, _ := simpleModel()
 	for _, c := range []struct{ iters, burn int }{{0, 0}, {-1, 0}, {10, -1}} {
-		if _, err := m.RunMCMC(c.iters, c.burn); err == nil {
-			t.Errorf("RunMCMC(%d, %d): want error, got nil", c.iters, c.burn)
+		if _, err := m.Run(Options{Iterations: c.iters, BurnIn: c.burn}); err == nil {
+			t.Errorf("Run(%d, %d): want error, got nil", c.iters, c.burn)
 		}
 	}
 }
