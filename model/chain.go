@@ -18,22 +18,14 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 	}
 	for step := 0; step < o.BurnIn+o.Iterations*o.Thin; step++ {
 		m.proposeWithScales(curr, rng, r.Scales[c], &proposal)
-		decision := m.acceptDecision(&proposal, curr, rng)
+		acceptedProposal := m.accept(&proposal, curr, rng)
 		if step >= o.BurnIn {
 			d := &r.Diagnostics[c]
 			d.Proposed++
-			switch decision {
-			case accepted:
+			if acceptedProposal {
 				d.Accepted++
-			case rejectedProbability:
-				d.RejectedProbability++
-			case rejectedPrior:
-				d.RejectedPrior++
-			case rejectedNonFinite:
-				d.RejectedNonFinite++
 			}
 		}
-		acceptedProposal := decision == accepted
 		if acceptedProposal {
 			curr, proposal = proposal, curr
 		}

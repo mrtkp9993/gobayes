@@ -37,35 +37,26 @@ func (m *Model) proposeWithScales(curr Proposal, rng *random.Generator, scales [
 	}
 }
 
-type acceptanceDecision uint8
-
-const (
-	accepted acceptanceDecision = iota
-	rejectedProbability
-	rejectedPrior
-	rejectedNonFinite
-)
-
-func (m *Model) acceptDecision(p *Proposal, curr Proposal, rng *random.Generator) acceptanceDecision {
+func (m *Model) accept(p *Proposal, curr Proposal, rng *random.Generator) bool {
 	if math.IsInf(p.LogPrior, -1) {
-		return rejectedPrior
+		return false
 	}
 	if math.IsNaN(p.LogPrior) || math.IsInf(p.LogPrior, 1) {
-		return rejectedNonFinite
+		return false
 	}
 	p.LogLik = m.LogLik(p.Params)
 	if math.IsNaN(p.LogLik) || math.IsInf(p.LogLik, 1) || math.IsNaN(p.LogQRatio) || math.IsInf(p.LogQRatio, 0) {
-		return rejectedNonFinite
+		return false
 	}
 	if math.IsInf(p.LogLik, -1) {
-		return rejectedProbability
+		return false
 	}
 	logA := p.LogPosterior() - curr.LogPosterior() + p.LogQRatio
 	if math.IsNaN(logA) {
-		return rejectedNonFinite
+		return false
 	}
 	if logA >= 0 || math.Log(rng.Float64()) < logA {
-		return accepted
+		return true
 	}
-	return rejectedProbability
+	return false
 }

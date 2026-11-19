@@ -12,10 +12,10 @@ func PrintDiagnostics(result *model.Result) {
 	rates := result.AcceptRate()
 	fmt.Println("\nChain diagnostics (after burn-in)")
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "Chain\tAcceptance\tProposed\tAccepted\tProbability reject\tPrior reject\tNon-finite reject")
+	fmt.Fprintln(w, "Chain\tAcceptance\tProposed\tAccepted\tRejected")
 	for i, d := range result.Diagnostics {
-		fmt.Fprintf(w, "%d\t%.3f\t%d\t%d\t%d\t%d\t%d\n",
-			i+1, rates[i], d.Proposed, d.Accepted, d.RejectedProbability, d.RejectedPrior, d.RejectedNonFinite)
+		fmt.Fprintf(w, "%d\t%.3f\t%d\t%d\t%d\n",
+			i+1, rates[i], d.Proposed, d.Accepted, d.Proposed-d.Accepted)
 	}
 	w.Flush()
 	fmt.Println("\nParameter diagnostics")
