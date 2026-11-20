@@ -42,7 +42,7 @@ func main() {
 		Variables: []*variable.Variable{alpha, beta},
 		LogLik:    likelihood,
 	}
-	result, err := m.Run(model.Options{Iterations: 20000, BurnIn: 2000})
+	result, err := m.Run(model.Options{Iterations: 20000, BurnIn: 2000, Chains: 4})
 	if err != nil {
 		panic(err)
 	}

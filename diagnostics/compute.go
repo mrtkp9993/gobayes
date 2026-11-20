@@ -46,7 +46,7 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		return result, errors.New("variance estimate is not finite")
 	}
 	if m > 1 {
-		rh := math.Sqrt(varPlus / w)
+		rh := rankNormalizedSplitRHat(chains)
 		result.RHat = &rh
 	}
 	maxLag := min(n-1, 1000)

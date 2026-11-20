@@ -35,7 +35,7 @@ func main() {
 		LogLik:    likelihood,
 	}
 
-	result, err := m.Run(model.Options{Iterations: 10000, BurnIn: 1000})
+	result, err := m.Run(model.Options{Iterations: 10000, BurnIn: 1000, Chains: 4})
 	if err != nil {
 		panic(err)
 	}
