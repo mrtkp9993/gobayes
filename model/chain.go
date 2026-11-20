@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/mrtkp9993/gobayes/diagnostics"
 	"github.com/mrtkp9993/gobayes/random"
 	"math"
 )
@@ -16,28 +17,48 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 	for i, v := range m.Variables {
 		r.Scales[c][i] = v.ProposalScale
 	}
+	if o.Componentwise {
+		r.Diagnostics.Components[c] = make([]diagnostics.ChainDiagnostics, len(m.Variables))
+	}
 	for step := 0; step < o.BurnIn+o.Iterations*o.Thin; step++ {
-		m.proposeWithScales(curr, rng, r.Scales[c], &proposal)
-		acceptedProposal := m.accept(&proposal, curr, rng)
-		if step >= o.BurnIn {
-			d := &r.Diagnostics[c]
-			d.Proposed++
-			if acceptedProposal {
-				d.Accepted++
+		if o.Componentwise {
+			for i := range m.Variables {
+				m.proposeComponent(curr, rng, r.Scales[c][i], i, &proposal)
+				accepted := m.accept(&proposal, curr, rng)
+				if step >= o.BurnIn {
+					d := &r.Diagnostics.Chains[c]
+					component := &r.Diagnostics.Components[c][i]
+					d.Proposed++
+					component.Proposed++
+					if accepted {
+						d.Accepted++
+						component.Accepted++
+					}
+				}
+				if accepted {
+					curr, proposal = proposal, curr
+				}
+				if o.Adapt && step < o.BurnIn {
+					r.Scales[c][i] = adaptScale(r.Scales[c][i], accepted, step, o.TargetAccept)
+				}
 			}
-		}
-		if acceptedProposal {
-			curr, proposal = proposal, curr
-		}
-		if o.Adapt && step < o.BurnIn {
-			indicator := 0.0
-			if acceptedProposal {
-				indicator = 1
+		} else {
+			m.proposeWithScales(curr, rng, r.Scales[c], &proposal)
+			acceptedProposal := m.accept(&proposal, curr, rng)
+			if step >= o.BurnIn {
+				d := &r.Diagnostics.Chains[c]
+				d.Proposed++
+				if acceptedProposal {
+					d.Accepted++
+				}
 			}
-			gain := 1 / math.Sqrt(float64(step+1))
-			for i, scale := range r.Scales[c] {
-				logScale := math.Log(scale) + gain*(indicator-o.TargetAccept)
-				r.Scales[c][i] = math.Exp(math.Max(-20, math.Min(20, logScale)))
+			if acceptedProposal {
+				curr, proposal = proposal, curr
+			}
+			if o.Adapt && step < o.BurnIn {
+				for i, scale := range r.Scales[c] {
+					r.Scales[c][i] = adaptScale(scale, acceptedProposal, step, o.TargetAccept)
+				}
 			}
 		}
 		if step >= o.BurnIn && (step-o.BurnIn+1)%o.Thin == 0 {
@@ -48,4 +69,14 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 		}
 	}
 	return nil
+}
+
+func adaptScale(scale float64, accepted bool, step int, target float64) float64 {
+	indicator := 0.0
+	if accepted {
+		indicator = 1
+	}
+	gain := 1 / math.Sqrt(float64(step+1))
+	logScale := math.Log(scale) + gain*(indicator-target)
+	return math.Exp(math.Max(-20, math.Min(20, logScale)))
 }

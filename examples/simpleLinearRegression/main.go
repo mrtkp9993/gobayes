@@ -5,7 +5,7 @@ import (
 	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
-	"github.com/mrtkp9993/gobayes/internal/exampleutil"
+	"github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -56,5 +56,5 @@ func main() {
 	meanAlpha := sumAlpha / float64(len(result.Draws[0][0]))
 	meanBeta := sumBeta / float64(len(result.Draws[0][0]))
 	fmt.Printf("Posterior mean of α ≈ %.4f, β ≈ %.4f\n", meanAlpha, meanBeta)
-	exampleutil.PrintDiagnostics(result)
+	io.PrintDiagnostics(result)
 }

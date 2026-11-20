@@ -17,7 +17,7 @@ import (
 	"sort"
 
 	"github.com/mrtkp9993/gobayes/distributions"
-	"github.com/mrtkp9993/gobayes/internal/exampleutil"
+	"github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -70,5 +70,5 @@ func main() {
 	fmt.Printf("MTBF 80%% lower bound ≈ %.0f h (NIST: 600)\n", q(0.20))
 	fmt.Printf("MTBF median          ≈ %.0f h (NIST: 901)\n", q(0.50))
 	fmt.Printf("MTBF 10%% lower bound ≈ %.0f h (NIST: 1897)\n", q(0.90))
-	exampleutil.PrintDiagnostics(result)
+	io.PrintDiagnostics(result)
 }

@@ -1,4 +1,4 @@
-package exampleutil
+package io
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ func PrintDiagnostics(result *model.Result) {
 	fmt.Println("\nChain diagnostics (after burn-in)")
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(w, "Chain\tAcceptance\tProposed\tAccepted\tRejected")
-	for i, d := range result.Diagnostics {
+	for i, d := range result.Diagnostics.Chains {
 		fmt.Fprintf(w, "%d\t%.3f\t%d\t%d\t%d\n",
 			i+1, rates[i], d.Proposed, d.Accepted, d.Proposed-d.Accepted)
 	}

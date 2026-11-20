@@ -24,7 +24,11 @@ func (m *Model) Run(o Options) (*Result, error) {
 		return nil, errors.New("initial log-posterior must be finite")
 	}
 	if o.TargetAccept == 0 {
-		o.TargetAccept = 0.234
+		if o.Componentwise {
+			o.TargetAccept = 0.44
+		} else {
+			o.TargetAccept = 0.234
+		}
 	}
 	names := make([]string, len(m.Variables))
 	for i, v := range m.Variables {
@@ -34,7 +38,10 @@ func (m *Model) Run(o Options) (*Result, error) {
 	if seed == 0 {
 		seed = random.Uint64()
 	}
-	r := &Result{Names: names, Seed: seed, Draws: make([][][]float64, o.Chains), Scales: make([][]float64, o.Chains), Diagnostics: make([]diagnostics.ChainDiagnostics, o.Chains)}
+	r := &Result{Names: names, Seed: seed, Draws: make([][][]float64, o.Chains), Scales: make([][]float64, o.Chains), Diagnostics: &diagnostics.Diagnostics{Chains: make([]diagnostics.ChainDiagnostics, o.Chains)}}
+	if o.Componentwise {
+		r.Diagnostics.Components = make([][]diagnostics.ChainDiagnostics, o.Chains)
+	}
 	errs := make([]error, o.Chains)
 	var wg sync.WaitGroup
 	for c := 0; c < o.Chains; c++ {

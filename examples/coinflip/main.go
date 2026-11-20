@@ -5,7 +5,7 @@ import (
 	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
-	"github.com/mrtkp9993/gobayes/internal/exampleutil"
+	bayesio "github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -46,5 +46,5 @@ func main() {
 	}
 	mean := sum / float64(len(result.Draws[0][0]))
 	fmt.Printf("Posterior mean of θ ≈ %.4f\n", mean)
-	exampleutil.PrintDiagnostics(result)
+	bayesio.PrintDiagnostics(result)
 }

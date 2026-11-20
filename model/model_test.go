@@ -338,7 +338,7 @@ func TestChainDiagnostics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := r.Diagnostics[0]
+	d := r.Diagnostics.Chains[0]
 	if d.Proposed != 1000 || d.Accepted <= 0 || d.Accepted >= d.Proposed {
 		t.Fatalf("incorrect diagnostics: %+v", d)
 	}
@@ -385,5 +385,63 @@ func TestRunArgumentErrors(t *testing.T) {
 		if _, err := m.Run(Options{Iterations: c.iters, BurnIn: c.burn}); err == nil {
 			t.Errorf("Run(%d, %d): want error, got nil", c.iters, c.burn)
 		}
+	}
+}
+
+func TestComponentwisePosteriorAndDiagnostics(t *testing.T) {
+	m := &Model{Variables: []*variable.Variable{
+		{Name: "x", Value: 0, Prior: distributions.Normal{Sigma: 1}, ProposalScale: 1},
+		{Name: "y", Value: 1, Prior: distributions.Gamma{Alpha: 2, Beta: 1}, ProposalScale: 0.7, Multiplicative: true},
+	}, LogLik: func(p map[string]float64) float64 {
+		return distributions.Normal{Mu: p["x"] + p["y"], Sigma: 1}.LogProb(1)
+	}}
+	o := Options{Iterations: 50000, BurnIn: 3000, Thin: 2, Chains: 2, Seed: testSeed, Adapt: true, Componentwise: true}
+	r, err := m.Run(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := m.Run(o)
+	if err != nil || !reflect.DeepEqual(r, again) {
+		t.Fatal("componentwise runs are not reproducible", err)
+	}
+	for c, components := range r.Diagnostics.Components {
+		var proposed, accepted int
+		for _, d := range components {
+			if d.Proposed != o.Iterations*o.Thin || d.Accepted <= 0 || d.Accepted >= d.Proposed {
+				t.Fatalf("bad component counts: %+v", d)
+			}
+			proposed += d.Proposed
+			accepted += d.Accepted
+		}
+		if r.Diagnostics.Chains[c].Proposed != proposed || r.Diagnostics.Chains[c].Accepted != accepted {
+			t.Fatal("aggregate counts differ")
+		}
+	}
+	// Independently integrate out x: y has density proportional to
+	// y exp(-y) exp(-(1-y)^2/4).
+	x, _ := r.Column("x")
+	y, _ := r.Column("y")
+	var sumY, sumX float64
+	for i := range x[0] {
+		sumX += x[0][i]
+		sumY += y[0][i]
+	}
+	meanY, meanX := sumY/float64(len(y[0])), sumX/float64(len(x[0]))
+	var numerator, denominator float64
+	const h = 0.0005
+	for z := h; z < 20; z += h {
+		w := z * math.Exp(-z-(1-z)*(1-z)/4)
+		denominator += w
+		numerator += z * w
+	}
+	wantY := numerator / denominator
+	if math.Abs(meanY-wantY) > 0.04 || math.Abs(meanX-(1-wantY)/2) > 0.04 {
+		t.Fatalf("posterior means x=%g y=%g, want %g %g", meanX, meanY, (1-wantY)/2, wantY)
+	}
+	long := o
+	long.Iterations++
+	r2, err := m.Run(long)
+	if err != nil || !reflect.DeepEqual(r.Scales, r2.Scales) {
+		t.Fatal("adaptation did not stop after burn-in", err)
 	}
 }

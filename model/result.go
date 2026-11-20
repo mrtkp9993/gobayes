@@ -11,12 +11,15 @@ type Result struct {
 	Draws       [][][]float64 // [chain][variable][draw]
 	Scales      [][]float64
 	Seed        uint64
-	Diagnostics []diagnostics.ChainDiagnostics
+	Diagnostics *diagnostics.Diagnostics
 }
 
 func (r *Result) AcceptRate() []float64 {
-	rates := make([]float64, len(r.Diagnostics))
-	for i, d := range r.Diagnostics {
+	if r.Diagnostics == nil {
+		return nil
+	}
+	rates := make([]float64, len(r.Diagnostics.Chains))
+	for i, d := range r.Diagnostics.Chains {
 		if d.Proposed > 0 {
 			rates[i] = float64(d.Accepted) / float64(d.Proposed)
 		}

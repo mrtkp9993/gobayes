@@ -1,6 +1,7 @@
 package diagnostics
 
 type Diagnostics struct {
-	Chains []ChainDiagnostics
-	Params map[string]ParameterDiagnostics
+	Chains     []ChainDiagnostics
+	Params     map[string]ParameterDiagnostics
+	Components [][]ChainDiagnostics
 }

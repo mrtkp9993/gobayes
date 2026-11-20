@@ -6,7 +6,7 @@ import (
 	"sort"
 
 	"github.com/mrtkp9993/gobayes/distributions"
-	"github.com/mrtkp9993/gobayes/internal/exampleutil"
+	"github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -59,5 +59,5 @@ func main() {
 	bPost := b + T
 	fmt.Printf("Posterior mean of λ ≈ %.7f (exact 3/%.2f = %.7f)\n", mean, bPost, 3/bPost)
 	fmt.Printf("Posterior sd of λ   ≈ %.7f (exact √3/%.2f = %.7f)\n", sd, bPost, math.Sqrt(3)/bPost)
-	exampleutil.PrintDiagnostics(result)
+	io.PrintDiagnostics(result)
 }

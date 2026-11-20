@@ -6,7 +6,7 @@ import (
 	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
-	"github.com/mrtkp9993/gobayes/internal/exampleutil"
+	"github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -62,5 +62,5 @@ func main() {
 	muMean := sumMu / float64(len(result.Draws[0][0]))
 	sigmaMean := sumSigma / float64(len(result.Draws[0][0]))
 	fmt.Printf("Posterior mean of μ ≈ %.4f, σ ≈ %.4f\n", muMean, sigmaMean)
-	exampleutil.PrintDiagnostics(result)
+	io.PrintDiagnostics(result)
 }

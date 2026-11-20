@@ -1,8 +1,9 @@
 package model
 
 import (
-	"github.com/mrtkp9993/gobayes/random"
 	"math"
+
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 func (m *Model) initialState() Proposal {
@@ -35,6 +36,27 @@ func (m *Model) proposeWithScales(curr Proposal, rng *random.Generator, scales [
 		p.Params[v.Name] = newVal
 		p.LogPrior += v.Prior.LogProb(newVal)
 	}
+}
+
+func (m *Model) proposeComponent(curr Proposal, rng *random.Generator, scale float64, i int, p *Proposal) {
+	for name, value := range curr.Params {
+		p.Params[name] = value
+	}
+	v := m.Variables[i]
+	old := curr.Params[v.Name]
+	step := scale * rng.NormFloat64()
+	value := old + step
+	p.LogQRatio = 0
+	if v.Multiplicative {
+		value = old * math.Exp(step)
+		p.LogQRatio = step
+	}
+	p.Params[v.Name] = value
+	p.LogPrior = 0
+	for _, variable := range m.Variables {
+		p.LogPrior += variable.Prior.LogProb(p.Params[variable.Name])
+	}
+	p.LogLik = 0
 }
 
 func (m *Model) accept(p *Proposal, curr Proposal, rng *random.Generator) bool {

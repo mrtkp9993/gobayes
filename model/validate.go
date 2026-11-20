@@ -50,6 +50,9 @@ func (m *Model) validate(o Options) error {
 	if o.Iterations > 0 && len(m.Variables) > 0 && o.Iterations > int(^uint(0)>>1)/len(m.Variables) {
 		errs = append(errs, errors.New("draw storage size overflows int"))
 	}
+	if o.Componentwise && o.Iterations > 0 && o.Thin > 0 && len(m.Variables) > 0 && o.Iterations <= int(^uint(0)>>1)/o.Thin && o.Iterations*o.Thin > int(^uint(0)>>1)/len(m.Variables) {
+		errs = append(errs, errors.New("component proposal count overflows int"))
+	}
 	if math.IsNaN(o.TargetAccept) || math.IsInf(o.TargetAccept, 0) || o.TargetAccept < 0 || o.TargetAccept >= 1 {
 		errs = append(errs, errors.New("target acceptance must be zero or between 0 and 1"))
 	}
