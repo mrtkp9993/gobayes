@@ -1,21 +1,54 @@
 package model
 
 import (
+	"fmt"
+	"maps"
 	"math"
+	"slices"
 
 	"github.com/mrtkp9993/gobayes/random"
 )
 
-func (m *Model) initialState() Proposal {
+func (m *Model) initialState(rng *random.Generator) Proposal {
 	s := Proposal{Params: make(map[string]float64, len(m.Variables))}
 	for _, v := range m.Variables {
-		s.Params[v.Name] = v.Value
-		s.LogPrior += v.Prior.LogProb(v.Value)
+		value := v.Value
+		if rng != nil {
+			step := v.ProposalScale * (2*rng.Float64() - 1)
+			if v.Multiplicative {
+				value *= math.Exp(step)
+			} else {
+				value += step
+			}
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) || (v.Multiplicative && value <= 0) {
+			s.LogPrior = math.Inf(-1)
+			return s
+		}
+		s.Params[v.Name] = value
+		s.LogPrior += v.Prior.LogProb(value)
 	}
 	if !math.IsNaN(s.LogPrior) && !math.IsInf(s.LogPrior, 0) {
 		s.LogLik = m.LogLik(s.Params)
 	}
 	return s
+}
+
+func (m *Model) randomizedInitialState(rng *random.Generator, previous []Proposal) (Proposal, error) {
+	const maxAttempts = 1000
+	for range maxAttempts {
+		candidate := m.initialState(rng)
+		if lp := candidate.LogPosterior(); math.IsNaN(lp) || math.IsInf(lp, 0) {
+			continue
+		}
+		if slices.ContainsFunc(previous, func(start Proposal) bool {
+			return maps.Equal(start.Params, candidate.Params)
+		}) {
+			continue
+		}
+		return candidate, nil
+	}
+	return Proposal{}, fmt.Errorf("could not find a distinct initial state with finite log-posterior after %d attempts", maxAttempts)
 }
 
 func (m *Model) proposeWithScales(curr Proposal, rng *random.Generator, scales []float64, p *Proposal) {

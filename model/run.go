@@ -3,10 +3,11 @@ package model
 import (
 	"errors"
 	"fmt"
-	"github.com/mrtkp9993/gobayes/diagnostics"
-	"github.com/mrtkp9993/gobayes/random"
 	"math"
 	"sync"
+
+	"github.com/mrtkp9993/gobayes/diagnostics"
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 func (m *Model) Run(o Options) (*Result, error) {
@@ -19,7 +20,7 @@ func (m *Model) Run(o Options) (*Result, error) {
 	if err := m.validate(o); err != nil {
 		return nil, err
 	}
-	initial := m.initialState()
+	initial := m.initialState(nil)
 	if lp := initial.LogPosterior(); math.IsNaN(lp) || math.IsInf(lp, 0) {
 		return nil, errors.New("initial log-posterior must be finite")
 	}
@@ -38,6 +39,19 @@ func (m *Model) Run(o Options) (*Result, error) {
 	if seed == 0 {
 		seed = random.Uint64()
 	}
+	starts := make([]Proposal, o.Chains)
+	starts[0] = initial
+	if o.Chains > 1 {
+		const initializationStreamBit uint64 = 1 << 63
+		for c := range starts {
+			rng := random.New(seed, initializationStreamBit|uint64(c))
+			start, err := m.randomizedInitialState(rng, starts[:c])
+			if err != nil {
+				return nil, fmt.Errorf("chain %d: %w", c, err)
+			}
+			starts[c] = start
+		}
+	}
 	r := &Result{Names: names, Seed: seed, Draws: make([][][]float64, o.Chains), Scales: make([][]float64, o.Chains), Diagnostics: &diagnostics.Diagnostics{Chains: make([]diagnostics.ChainDiagnostics, o.Chains)}}
 	if o.Componentwise {
 		r.Diagnostics.Components = make([][]diagnostics.ChainDiagnostics, o.Chains)
@@ -48,12 +62,7 @@ func (m *Model) Run(o Options) (*Result, error) {
 		wg.Add(1)
 		go func(c int) {
 			defer wg.Done()
-			curr := initial
-			curr.Params = make(map[string]float64, len(initial.Params))
-			for name, value := range initial.Params {
-				curr.Params[name] = value
-			}
-			errs[c] = m.runChain(o, random.New(seed, uint64(c)), r, c, curr)
+			errs[c] = m.runChain(o, random.New(seed, uint64(c)), r, c, starts[c])
 		}(c)
 	}
 	wg.Wait()

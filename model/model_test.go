@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	"github.com/mrtkp9993/gobayes/random"
 	"github.com/mrtkp9993/gobayes/variable"
 )
 
@@ -258,7 +259,7 @@ func TestRunMultipleChainsAndThin(t *testing.T) {
 	if _, err := r.Column("missing"); err == nil {
 		t.Fatal("expected unknown column error")
 	}
-	full, err := m.Run(Options{Iterations: o.Iterations * o.Thin, BurnIn: o.BurnIn, Seed: o.Seed})
+	full, err := m.Run(Options{Iterations: o.Iterations * o.Thin, BurnIn: o.BurnIn, Chains: o.Chains, Seed: o.Seed})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,6 +357,89 @@ func TestInitialStateValidatedBeforeChains(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("likelihood called %d times, want 1", calls.Load())
+	}
+}
+
+func TestRunInitialStates(t *testing.T) {
+	x := &variable.Variable{Name: "x", Value: 2, Prior: distributions.Normal{Sigma: 10}, ProposalScale: 0.5}
+	y := &variable.Variable{Name: "y", Value: 3, Prior: distributions.Exponential{Lambda: 1}, ProposalScale: 0.75, Multiplicative: true}
+	run := func(chains int) *Result {
+		t.Helper()
+		initialEvaluations := int64(1)
+		if chains > 1 {
+			initialEvaluations += int64(chains)
+		}
+		var evaluations atomic.Int64
+		m := &Model{
+			Variables: []*variable.Variable{x, y},
+			LogLik: func(map[string]float64) float64 {
+				if evaluations.Add(1) > initialEvaluations {
+					return math.Inf(-1)
+				}
+				return 0
+			},
+		}
+		r, err := m.Run(Options{Iterations: 1, Chains: chains, Seed: testSeed})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for c, d := range r.Diagnostics.Chains {
+			if d.Accepted != 0 {
+				t.Fatalf("chain %d accepted a sampling proposal", c)
+			}
+		}
+		return r
+	}
+
+	single := run(1).Draws[0]
+	if single[0][0] != x.Value || single[1][0] != y.Value {
+		t.Fatalf("single chain started at %v, want (%g, %g)", single, x.Value, y.Value)
+	}
+
+	const chains = 16
+	first, again := run(chains), run(chains)
+	if !reflect.DeepEqual(first, again) {
+		t.Fatal("starting points differ between runs with the same seed")
+	}
+	seen := make(map[[2]float64]bool, chains)
+	for c, draws := range first.Draws {
+		start := [2]float64{draws[0][0], draws[1][0]}
+		if start[0] < x.Value-x.ProposalScale || start[0] > x.Value+x.ProposalScale {
+			t.Errorf("chain %d starts outside the additive bounds: %g", c, start[0])
+		}
+		if start[1] < y.Value*math.Exp(-y.ProposalScale) || start[1] > y.Value*math.Exp(y.ProposalScale) {
+			t.Errorf("chain %d starts outside the multiplicative bounds: %g", c, start[1])
+		}
+		if seen[start] {
+			t.Errorf("chain %d repeats a starting point: %v", c, start)
+		}
+		seen[start] = true
+	}
+}
+
+func TestRandomizedInitialStateRetriesOutsidePriorSupport(t *testing.T) {
+	firstOffset := 2*random.New(testSeed, 0).Float64() - 1
+	width := math.Abs(firstOffset) / 2
+	m := &Model{
+		Variables: []*variable.Variable{{Name: "x", Prior: distributions.Uniform{A: -width, B: width}, ProposalScale: 1}},
+		LogLik:    func(map[string]float64) float64 { return 0 },
+	}
+	start, err := m.randomizedInitialState(random.New(testSeed, 0), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if x := start.Params["x"]; x < -width || x > width {
+		t.Fatalf("starting point %g is outside prior support [%g, %g]", x, -width, width)
+	}
+}
+
+func TestRunFailsWhenDistinctInitialStateCannotBeGenerated(t *testing.T) {
+	m, v := simpleModel()
+	v.Value = 1
+	v.ProposalScale = math.SmallestNonzeroFloat64
+	r, err := m.Run(Options{Iterations: 1, Chains: 2, Seed: testSeed})
+	if r != nil || err == nil || !strings.Contains(err.Error(), "chain 1: could not find a distinct initial state") {
+		t.Fatalf("expected a distinct starting point error for the second chain, got %v, %v", r, err)
 	}
 }
 
