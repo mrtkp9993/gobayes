@@ -10,6 +10,8 @@ type Normal struct {
 	Mu, Sigma float64
 }
 
+func (Normal) IsContinuous() {}
+
 func (n Normal) LogProb(x float64) float64 {
 	if n.Sigma <= 0 {
 		return math.Inf(-1)

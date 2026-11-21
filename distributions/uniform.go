@@ -10,6 +10,8 @@ type Uniform struct {
 	A, B float64
 }
 
+func (Uniform) IsContinuous() {}
+
 func (u Uniform) LogProb(x float64) float64 {
 	if u.B <= u.A || x < u.A || x > u.B {
 		return math.Inf(-1)

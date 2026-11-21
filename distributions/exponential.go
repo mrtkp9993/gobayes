@@ -10,6 +10,8 @@ type Exponential struct {
 	Lambda float64
 }
 
+func (Exponential) IsContinuous() {}
+
 func (e Exponential) LogProb(x float64) float64 {
 	if e.Lambda <= 0 || x < 0 {
 		return math.Inf(-1)

@@ -11,6 +11,8 @@ type Gamma struct {
 	Beta  float64
 }
 
+func (Gamma) IsContinuous() {}
+
 func (g Gamma) LogProb(x float64) float64 {
 	if g.Alpha <= 0 || g.Beta <= 0 || x < 0 {
 		return math.Inf(-1)

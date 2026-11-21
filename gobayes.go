@@ -14,9 +14,10 @@ type (
 )
 
 type (
-	Distribution = distributions.Distribution
-	Exponential  = distributions.Exponential
-	Gamma        = distributions.Gamma
-	Normal       = distributions.Normal
-	Uniform      = distributions.Uniform
+	Distribution           = distributions.Distribution
+	ContinuousDistribution = distributions.ContinuousDistribution
+	Exponential            = distributions.Exponential
+	Gamma                  = distributions.Gamma
+	Normal                 = distributions.Normal
+	Uniform                = distributions.Uniform
 )
