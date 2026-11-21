@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/mrtkp9993/gobayes/distributions"
 	bayesio "github.com/mrtkp9993/gobayes/internal/io"
@@ -23,11 +22,7 @@ func main() {
 	}
 
 	likelihood := func(params map[string]float64) float64 {
-		t := params["theta"]
-		if t <= 0 || t >= 1 {
-			return math.Inf(-1)
-		}
-		return float64(heads)*math.Log(t) + float64(tails)*math.Log(1.0-t)
+		return (distributions.Binomial{N: heads + tails, P: params["theta"]}).LogProb(float64(heads))
 	}
 
 	m := &model.Model{

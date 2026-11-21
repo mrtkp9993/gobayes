@@ -10,9 +10,15 @@ type ContinuousDistribution interface {
 	IsContinuous()
 }
 
+type DiscreteDistribution interface {
+	Distribution
+	IsDiscrete()
+}
+
 var (
 	_ ContinuousDistribution = Normal{}
 	_ ContinuousDistribution = Uniform{}
 	_ ContinuousDistribution = Gamma{}
 	_ ContinuousDistribution = Exponential{}
+	_ DiscreteDistribution   = Binomial{}
 )
