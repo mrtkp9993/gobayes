@@ -27,11 +27,66 @@ func TestComputeIndependentAndShiftedChains(t *testing.T) {
 		chains[0][i] += 4
 	}
 	shifted, err := Compute(chains)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || !strings.Contains(err.Error(), "lag limit") {
+		t.Fatalf("expected unresolved autocorrelation tail for shifted chains, got %v", err)
 	}
-	if *shifted.RHat < 1.2 || shifted.ESS >= d.ESS {
+	if shifted.RHat == nil || *shifted.RHat < 1.2 {
 		t.Fatalf("shifted chains not detected: %+v", shifted)
+	}
+}
+
+func TestAutocorrelationTimeLagLimit(t *testing.T) {
+	const rho = 0.9999
+	correlations := make([]float64, 1001)
+	for lag := range correlations {
+		correlations[lag] = math.Pow(rho, float64(lag))
+	}
+	if _, err := autocorrelationTime(correlations, 100_000); err == nil {
+		t.Fatal("expected error for a positive AR(1) tail at the lag limit")
+	}
+}
+
+func TestAutocorrelationTimePairs(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		correlations []float64
+		draws        int
+		want         float64
+		wantError    bool
+	}{
+		{"negative pair before limit", []float64{1, 0.5, -0.2, -0.1, 0.9}, 10000, 2, false},
+		{"zero pair at limit", []float64{1, 0.5, 0.2, -0.2}, 10000, 2, false},
+		{"unpaired negative lag", []float64{1, 0.5, -0.9}, 10000, 0, true},
+		{"all available pairs", []float64{1, 0.5, 0.2, 0.1}, 4, 2.6, false},
+		{"unpaired final draw", []float64{1, 0.5, 0.2}, 3, 2, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := autocorrelationTime(tc.correlations, tc.draws)
+			if (err != nil) != tc.wantError {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !tc.wantError && math.Abs(got-tc.want) > 1e-12 {
+				t.Fatalf("integrated autocorrelation time=%g, want %g", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestComputeLongAutocorrelationTail(t *testing.T) {
+	const rho = 0.9999
+	rng := rand.New(rand.NewPCG(42, 0))
+	chain := make([]float64, 100_000)
+	chain[0] = rng.NormFloat64()
+	innovationScale := math.Sqrt(1 - rho*rho)
+	for i := 1; i < len(chain); i++ {
+		chain[i] = rho*chain[i-1] + innovationScale*rng.NormFloat64()
+	}
+	result, err := Compute([][]float64{chain})
+	if err == nil || !strings.Contains(err.Error(), "lag limit 1000") {
+		t.Fatalf("expected lag limit error for a slowly mixing AR(1) chain, got %v", err)
+	}
+	if result.ESS != 0 || result.MCSEMean != 0 {
+		t.Fatalf("unexpected estimates from a truncated tail: %+v", result)
 	}
 }
 

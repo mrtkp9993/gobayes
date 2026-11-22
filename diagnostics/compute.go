@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"errors"
+	"fmt"
 	"math"
 )
 
@@ -66,13 +67,9 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		}
 		result.Autocorrelation[lag] = 1 - (w-cov)/varPlus
 	}
-	tau := -1.0
-	for lag := 0; lag+1 <= maxLag; lag += 2 {
-		pair := result.Autocorrelation[lag] + result.Autocorrelation[lag+1]
-		if pair <= 0 {
-			break
-		}
-		tau += 2 * pair
+	tau, err := autocorrelationTime(result.Autocorrelation, n)
+	if err != nil {
+		return result, err
 	}
 	total := float64(n) * float64(m)
 	if tau < 1/total {
@@ -81,4 +78,19 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 	result.ESS = math.Min(total, total/tau)
 	result.MCSEMean = math.Sqrt(varPlus / result.ESS)
 	return result, nil
+}
+
+func autocorrelationTime(autocorrelation []float64, draws int) (float64, error) {
+	tau := -1.0
+	for lag := 0; lag+1 < len(autocorrelation); lag += 2 {
+		pair := autocorrelation[lag] + autocorrelation[lag+1]
+		if pair <= 0 {
+			return tau, nil
+		}
+		tau += 2 * pair
+	}
+	if len(autocorrelation) < draws {
+		return 0, fmt.Errorf("ESS and MCSE are unavailable: autocorrelation pairs remain positive at lag limit %d", len(autocorrelation)-1)
+	}
+	return tau, nil
 }
