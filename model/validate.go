@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+
+	"github.com/mrtkp9993/gobayes/distributions"
 )
 
 func (m *Model) validate(o Options) error {
@@ -33,11 +35,17 @@ func (m *Model) validate(o Options) error {
 		if v.Prior == nil || (reflect.ValueOf(v.Prior).Kind() == reflect.Ptr && reflect.ValueOf(v.Prior).IsNil()) {
 			errs = append(errs, fmt.Errorf("%s: Prior is nil", v.Name))
 		}
-		if !(v.ProposalScale > 0) || math.IsInf(v.ProposalScale, 0) {
+		_, discrete := v.Prior.(distributions.DiscreteDistribution)
+		if discrete && v.Multiplicative {
+			errs = append(errs, fmt.Errorf("%s: discrete prior does not support multiplicative proposals", v.Name))
+		}
+		if !(discrete && v.ProposalScale == 0) && (!(v.ProposalScale > 0) || math.IsInf(v.ProposalScale, 0)) {
 			errs = append(errs, fmt.Errorf("%s: ProposalScale must be finite and positive", v.Name))
 		}
 		if math.IsNaN(v.Value) || math.IsInf(v.Value, 0) {
 			errs = append(errs, fmt.Errorf("%s: Value must be finite", v.Name))
+		} else if discrete && (math.Trunc(v.Value) != v.Value || math.Abs(v.Value) > 1<<53) {
+			errs = append(errs, fmt.Errorf("%s: discrete Value must be an integer between -2^53 and 2^53", v.Name))
 		} else if v.Multiplicative && v.Value <= 0 {
 			errs = append(errs, fmt.Errorf("%s: multiplicative proposal needs Value > 0", v.Name))
 		}

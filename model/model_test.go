@@ -86,11 +86,7 @@ func TestConjugateBetaBinomial(t *testing.T) {
 	m := &Model{
 		Variables: []*variable.Variable{theta},
 		LogLik: func(p map[string]float64) float64 {
-			th := p["theta"]
-			if th <= 0 || th >= 1 {
-				return math.Inf(-1)
-			}
-			return k*math.Log(th) + (n-k)*math.Log(1-th)
+			return (distributions.Binomial{N: int(n), P: p["theta"]}).LogProb(k)
 		},
 	}
 	a, b := 1+k, 1+n-k

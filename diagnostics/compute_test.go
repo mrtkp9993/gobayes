@@ -3,6 +3,7 @@ package diagnostics
 import (
 	"math"
 	"math/rand/v2"
+	"strings"
 	"testing"
 )
 
@@ -96,5 +97,17 @@ func TestComputeInvalidAndSingleChain(t *testing.T) {
 	d, err := Compute([][]float64{{1, 2, 3, 4, 5}})
 	if err != nil || d.RHat != nil || d.Autocorrelation[0] != 1 {
 		t.Fatalf("single chain: %+v %v", d, err)
+	}
+}
+
+func TestComputeConstantChains(t *testing.T) {
+	for _, chains := range [][][]float64{
+		{{0, 0, 0, 0}, {0, 0, 0, 0}},
+		{{0, 0, 0, 0}, {1, 1, 1, 1}},
+	} {
+		_, err := Compute(chains)
+		if err == nil || !strings.Contains(err.Error(), "ESS, MCSE and R-hat are unavailable") {
+			t.Fatalf("expected explicit unavailable diagnostics, got %v", err)
+		}
 	}
 }

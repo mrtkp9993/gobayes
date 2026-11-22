@@ -2,6 +2,7 @@ package model
 
 import (
 	"github.com/mrtkp9993/gobayes/diagnostics"
+	"github.com/mrtkp9993/gobayes/distributions"
 	"github.com/mrtkp9993/gobayes/random"
 	"math"
 )
@@ -16,6 +17,9 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 	r.Scales[c] = make([]float64, len(m.Variables))
 	for i, v := range m.Variables {
 		r.Scales[c][i] = v.ProposalScale
+		if _, discrete := v.Prior.(distributions.DiscreteDistribution); discrete && v.ProposalScale == 0 {
+			r.Scales[c][i] = 1
+		}
 	}
 	if o.Componentwise {
 		r.Diagnostics.Components[c] = make([]diagnostics.ChainDiagnostics, len(m.Variables))
@@ -38,7 +42,8 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 				if accepted {
 					curr, proposal = proposal, curr
 				}
-				if o.Adapt && step < o.BurnIn {
+				_, discrete := m.Variables[i].Prior.(distributions.DiscreteDistribution)
+				if o.Adapt && step < o.BurnIn && !discrete {
 					r.Scales[c][i] = adaptScale(r.Scales[c][i], accepted, step, o.TargetAccept)
 				}
 			}
@@ -57,6 +62,9 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 			}
 			if o.Adapt && step < o.BurnIn {
 				for i, scale := range r.Scales[c] {
+					if _, discrete := m.Variables[i].Prior.(distributions.DiscreteDistribution); discrete {
+						continue
+					}
 					r.Scales[c][i] = adaptScale(scale, acceptedProposal, step, o.TargetAccept)
 				}
 			}

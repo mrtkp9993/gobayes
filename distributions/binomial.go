@@ -80,9 +80,7 @@ func (b Binomial) Sample() float64 {
 	if b.P == 1 {
 		return float64(b.N)
 	}
-
-	p := min(b.P, 1-b.P)
-	logMiss := math.Log1p(-p)
+	logMiss := math.Log1p(-min(b.P, 1-b.P))
 	count := 0
 	for remaining := b.N; remaining > 0; {
 		skipped := math.Floor(math.Log(random.Float64()) / logMiss)

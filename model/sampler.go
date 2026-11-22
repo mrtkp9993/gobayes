@@ -6,6 +6,7 @@ import (
 	"math"
 	"slices"
 
+	"github.com/mrtkp9993/gobayes/distributions"
 	"github.com/mrtkp9993/gobayes/random"
 )
 
@@ -14,11 +15,15 @@ func (m *Model) initialState(rng *random.Generator) Proposal {
 	for _, v := range m.Variables {
 		value := v.Value
 		if rng != nil {
-			step := v.ProposalScale * (2*rng.Float64() - 1)
-			if v.Multiplicative {
-				value *= math.Exp(step)
+			if _, discrete := v.Prior.(distributions.DiscreteDistribution); discrete {
+				value = proposeDiscrete(value, v.ProposalScale, rng)
 			} else {
-				value += step
+				step := v.ProposalScale * (2*rng.Float64() - 1)
+				if v.Multiplicative {
+					value *= math.Exp(step)
+				} else {
+					value += step
+				}
 			}
 		}
 		if math.IsNaN(value) || math.IsInf(value, 0) || (v.Multiplicative && value <= 0) {
@@ -36,6 +41,7 @@ func (m *Model) initialState(rng *random.Generator) Proposal {
 
 func (m *Model) randomizedInitialState(rng *random.Generator, previous []Proposal) (Proposal, error) {
 	const maxAttempts = 1000
+	var fallback *Proposal
 	for range maxAttempts {
 		candidate := m.initialState(rng)
 		if lp := candidate.LogPosterior(); math.IsNaN(lp) || math.IsInf(lp, 0) {
@@ -44,9 +50,15 @@ func (m *Model) randomizedInitialState(rng *random.Generator, previous []Proposa
 		if slices.ContainsFunc(previous, func(start Proposal) bool {
 			return maps.Equal(start.Params, candidate.Params)
 		}) {
+			if m.hasDiscrete() && fallback == nil {
+				fallback = &candidate
+			}
 			continue
 		}
 		return candidate, nil
+	}
+	if fallback != nil {
+		return *fallback, nil
 	}
 	return Proposal{}, fmt.Errorf("could not find a distinct initial state with finite log-posterior after %d attempts", maxAttempts)
 }
@@ -59,14 +71,18 @@ func (m *Model) proposeWithScales(curr Proposal, rng *random.Generator, scales [
 			scale = scales[i]
 		}
 		var newVal float64
-		if v.Multiplicative {
-			factor := math.Exp(scale * rng.NormFloat64())
-			newVal = curr.Params[v.Name] * factor
-			p.LogQRatio += math.Log(factor)
+		if _, discrete := v.Prior.(distributions.DiscreteDistribution); discrete {
+			newVal = proposeDiscrete(curr.Params[v.Name], scale, rng)
 		} else {
-			newVal = curr.Params[v.Name] + scale*rng.NormFloat64()
+			var logQRatio float64
+			newVal, logQRatio = proposeContinuous(curr.Params[v.Name], scale, v.Multiplicative, rng)
+			p.LogQRatio += logQRatio
 		}
 		p.Params[v.Name] = newVal
+		if math.IsNaN(newVal) || math.IsInf(newVal, 0) {
+			p.LogPrior = math.Inf(-1)
+			return
+		}
 		p.LogPrior += v.Prior.LogProb(newVal)
 	}
 }
@@ -77,19 +93,53 @@ func (m *Model) proposeComponent(curr Proposal, rng *random.Generator, scale flo
 	}
 	v := m.Variables[i]
 	old := curr.Params[v.Name]
-	step := scale * rng.NormFloat64()
-	value := old + step
+	var value float64
 	p.LogQRatio = 0
-	if v.Multiplicative {
-		value = old * math.Exp(step)
-		p.LogQRatio = step
+	if _, discrete := v.Prior.(distributions.DiscreteDistribution); discrete {
+		value = proposeDiscrete(old, scale, rng)
+	} else {
+		value, p.LogQRatio = proposeContinuous(old, scale, v.Multiplicative, rng)
 	}
 	p.Params[v.Name] = value
+	if math.IsNaN(value) || math.IsInf(value, 0) {
+		p.LogPrior = math.Inf(-1)
+		p.LogLik = 0
+		return
+	}
 	p.LogPrior = 0
 	for _, variable := range m.Variables {
 		p.LogPrior += variable.Prior.LogProb(p.Params[variable.Name])
 	}
 	p.LogLik = 0
+}
+
+func (m *Model) hasDiscrete() bool {
+	for _, v := range m.Variables {
+		if _, ok := v.Prior.(distributions.DiscreteDistribution); ok {
+			return true
+		}
+	}
+	return false
+}
+
+func proposeContinuous(value, scale float64, multiplicative bool, rng *random.Generator) (candidate, logQRatio float64) {
+	step := scale * rng.NormFloat64()
+	if multiplicative {
+		return value * math.Exp(step), step
+	}
+	return value + step, 0
+}
+
+func proposeDiscrete(value, scale float64, rng *random.Generator) float64 {
+	if scale == 0 {
+		scale = 1
+	}
+	step := math.Round(scale * rng.NormFloat64())
+	const maxInteger = 1 << 53
+	if step < -maxInteger-value || step > maxInteger-value {
+		return math.Inf(1)
+	}
+	return value + step
 }
 
 func (m *Model) accept(p *Proposal, curr Proposal, rng *random.Generator) bool {

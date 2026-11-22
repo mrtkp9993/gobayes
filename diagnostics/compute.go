@@ -31,7 +31,10 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		}
 		w += vars[c] / float64(m)
 	}
-	if w <= 0 || math.IsInf(w, 0) || math.IsNaN(w) {
+	if w == 0 {
+		return result, errors.New("ESS, MCSE and R-hat are unavailable because all chains have constant draws")
+	}
+	if w < 0 || math.IsInf(w, 0) || math.IsNaN(w) {
 		return result, errors.New("within-chain variance must be finite and positive")
 	}
 	var between float64
