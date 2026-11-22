@@ -38,6 +38,29 @@ func TestNormalLogProbInvalidParams(t *testing.T) {
 	}
 }
 
+func TestNormalLogProbExtremeScales(t *testing.T) {
+	const logNormalizer = 0.9189385332046727
+	for _, tc := range []struct {
+		name string
+		d    Normal
+		x    float64
+		want float64
+	}{
+		{"large sigma at mean", Normal{Mu: 3, Sigma: 1e200}, 3, -200*math.Ln10 - logNormalizer},
+		{"large sigma one deviation", Normal{Sigma: 1e200}, 1e200, -200*math.Ln10 - logNormalizer - 0.5},
+		{"small sigma at mean", Normal{Sigma: 1e-200}, 0, 200*math.Ln10 - logNormalizer},
+		{"small sigma one deviation", Normal{Sigma: 1e-200}, 1e-200, 200*math.Ln10 - logNormalizer - 0.5},
+		{"smallest sigma at mean", Normal{Sigma: math.SmallestNonzeroFloat64}, 0, 1074*math.Ln2 - logNormalizer},
+		{"overflowing difference", Normal{Mu: -1e308, Sigma: 1e308}, 1e308, -308*math.Ln10 - logNormalizer - 2},
+		{"negative overflowing difference", Normal{Mu: 1e308, Sigma: 1e308}, -1e308, -308*math.Ln10 - logNormalizer - 2},
+		{"large standardized value", Normal{Sigma: 1}, 1.5e154, -1.125e308},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			disttest.AssertClose(t, tc.d.LogProb(tc.x), tc.want, "LogProb")
+		})
+	}
+}
+
 func TestNormalSample(t *testing.T) {
 	for _, d := range []Normal{{0, 1}, {-3, 0.5}, {10, 4}} {
 		t.Run(fmt.Sprintf("mu=%v,sigma=%v", d.Mu, d.Sigma), func(t *testing.T) {

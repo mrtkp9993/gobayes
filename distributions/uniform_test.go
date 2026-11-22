@@ -39,6 +39,50 @@ func TestUniformLogProbInvalidParams(t *testing.T) {
 	}
 }
 
+func TestUniformLogProbExtremeRanges(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		d    Uniform
+		x    float64
+		want float64
+	}{
+		{"overflowing width", Uniform{A: -1e308, B: 1e308}, 0, -308*math.Ln10 - math.Ln2},
+		{"large positive bounds", Uniform{A: 5e307, B: 1e308}, 7e307, -308*math.Ln10 + math.Ln2},
+		{"large negative bounds", Uniform{A: -1e308, B: -5e307}, -7e307, -308*math.Ln10 + math.Ln2},
+		{"smallest width", Uniform{A: 0, B: math.SmallestNonzeroFloat64}, 0, 1074 * math.Ln2},
+		{"adjacent large bounds", Uniform{A: 0x1p1023, B: 0x1.0000000000001p1023}, 0x1p1023, -971 * math.Ln2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			disttest.AssertClose(t, tc.d.LogProb(tc.x), tc.want, "LogProb")
+		})
+	}
+}
+
+func TestUniformSampleExtremeRanges(t *testing.T) {
+	for _, d := range []Uniform{
+		{A: -1e308, B: 1e308},
+		{A: 5e307, B: 1e308},
+		{A: -1e308, B: -5e307},
+		{A: 0, B: math.SmallestNonzeroFloat64},
+		{A: 0x1p1023, B: 0x1.0000000000001p1023},
+	} {
+		disttest.DrawSamples(t, d, 1000, func(x float64) bool {
+			return x >= d.A && x <= d.B
+		})
+	}
+	// Scaling to [-1,1] keeps the moment calculations finite.
+	d := Uniform{A: -1e308, B: 1e308}
+	samples := disttest.DrawSamples(t, d, disttest.NSamples, func(x float64) bool {
+		return x >= d.A && x <= d.B
+	})
+	for i := range samples {
+		samples[i] /= 1e308
+	}
+	disttest.CheckStats(t, Uniform{A: -1, B: 1}, samples, disttest.TheoreticalStats{
+		Mean: 0, Median: 0, Var: 1.0 / 3, MAD: 0.5, Skew: 0, ExKurt: -1.2,
+	})
+}
+
 func TestUniformSample(t *testing.T) {
 	for _, d := range []Uniform{{0, 1}, {-3, 2}, {10, 10.5}} {
 		t.Run(fmt.Sprintf("A=%v,B=%v", d.A, d.B), func(t *testing.T) {
