@@ -5,9 +5,9 @@ package main
 import (
 	"fmt"
 	"math"
-	"sort"
 
 	"github.com/mrtkp9993/gobayes/distributions"
+	bayesio "github.com/mrtkp9993/gobayes/internal/io"
 	"github.com/mrtkp9993/gobayes/model"
 	"github.com/mrtkp9993/gobayes/variable"
 )
@@ -41,35 +41,16 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var samples []float64
 	var sum float64
+	count := 0
 	for _, chain := range result.Draws {
 		for _, x := range chain[0] {
-			samples = append(samples, x)
 			sum += x
+			count++
 		}
 	}
-	mean := sum / float64(len(samples))
-	var sumSquares float64
-	for _, x := range samples {
-		sumSquares += (x - mean) * (x - mean)
-	}
-	sort.Float64s(samples)
-	quantile := func(p float64) float64 {
-		position := p * float64(len(samples)-1)
-		i := int(position)
-		return samples[i] + (position-float64(i))*(samples[i+1]-samples[i])
-	}
-	diagnostics, err := result.ParameterDiagnostics("theta")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("DBDA2E Bernoulli-beta: 15 successes / 50 trials; prior Beta(1,1)")
-	fmt.Printf("Seed: %d; chains: %d; saved draws: %d\n", result.Seed, len(result.Draws), len(samples))
-	fmt.Printf("Posterior mean: %.6f; SD: %.6f; 95%% equal-tail interval: [%.6f, %.6f]\n",
-		mean, math.Sqrt(sumSquares/float64(len(samples)-1)), quantile(0.025), quantile(0.975))
-	fmt.Printf("ESS: %.1f; MCSE(mean): %.6f; R-hat: %.6f\n",
-		diagnostics.ESS, diagnostics.MCSEMean, *diagnostics.RHat)
+	fmt.Printf("Posterior mean of theta ≈ %.6f\n", sum/float64(count))
 	fmt.Printf("Analytic Beta(16,36): mean %.6f; SD %.6f\n",
 		16.0/52, math.Sqrt(16.0*36/(52*52*53)))
+	bayesio.PrintDiagnostics(result)
 }

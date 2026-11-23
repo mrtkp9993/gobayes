@@ -22,4 +22,5 @@ var (
 	_ ContinuousDistribution = Exponential{}
 	_ DiscreteDistribution   = Binomial{}
 	_ DiscreteDistribution   = Bernoulli{}
+	_ DiscreteDistribution   = Poisson{}
 )
