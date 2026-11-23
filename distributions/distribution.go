@@ -21,4 +21,5 @@ var (
 	_ ContinuousDistribution = Gamma{}
 	_ ContinuousDistribution = Exponential{}
 	_ DiscreteDistribution   = Binomial{}
+	_ DiscreteDistribution   = Bernoulli{}
 )
