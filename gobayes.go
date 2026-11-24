@@ -18,6 +18,7 @@ type (
 	ContinuousDistribution = distributions.ContinuousDistribution
 	DiscreteDistribution   = distributions.DiscreteDistribution
 	Binomial               = distributions.Binomial
+	NegativeBinomial       = distributions.NegativeBinomial
 	Exponential            = distributions.Exponential
 	Gamma                  = distributions.Gamma
 	Normal                 = distributions.Normal
