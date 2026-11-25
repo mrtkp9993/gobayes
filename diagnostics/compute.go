@@ -14,6 +14,10 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 	n, m := len(chains[0]), len(chains)
 	means := make([]float64, m)
 	vars := make([]float64, m)
+	var centered [][]float64
+	if n >= 256 {
+		centered = make([][]float64, m)
+	}
 	var grand, w float64
 	for c, xs := range chains {
 		if len(xs) != n {
@@ -26,8 +30,14 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 			means[c] += x / float64(n)
 		}
 		grand += means[c] / float64(m)
-		for _, x := range xs {
+		if centered != nil {
+			centered[c] = make([]float64, n)
+		}
+		for i, x := range xs {
 			d := x - means[c]
+			if centered != nil {
+				centered[c][i] = d
+			}
 			vars[c] += d * d / float64(n-1)
 		}
 		w += vars[c] / float64(m)
@@ -54,18 +64,28 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		result.RHat = &rh
 	}
 	maxLag := min(n-1, 1000)
-	result.Autocorrelation = make([]float64, maxLag+1)
+	result.Autocorrelation = make([]float64, 1, maxLag+1)
 	result.Autocorrelation[0] = 1
 	for lag := 1; lag <= maxLag; lag++ {
 		var cov float64
 		for c, xs := range chains {
 			var sum float64
-			for i := 0; i < n-lag; i++ {
-				sum += (xs[i] - means[c]) * (xs[i+lag] - means[c])
+			if centered != nil {
+				xs = centered[c]
+				for i := 0; i < n-lag; i++ {
+					sum += xs[i] * xs[i+lag]
+				}
+			} else {
+				for i := 0; i < n-lag; i++ {
+					sum += (xs[i] - means[c]) * (xs[i+lag] - means[c])
+				}
 			}
 			cov += sum / float64(n*m)
 		}
-		result.Autocorrelation[lag] = 1 - (w-cov)/varPlus
+		result.Autocorrelation = append(result.Autocorrelation, 1-(w-cov)/varPlus)
+		if lag%2 == 1 && result.Autocorrelation[lag-1]+result.Autocorrelation[lag] <= 0 {
+			break
+		}
 	}
 	tau, err := autocorrelationTime(result.Autocorrelation, n)
 	if err != nil {

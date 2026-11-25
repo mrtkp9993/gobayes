@@ -14,7 +14,7 @@ type Gamma struct {
 func (Gamma) IsContinuous() {}
 
 func (g Gamma) LogProb(x float64) float64 {
-	if g.Alpha <= 0 || g.Beta <= 0 || x < 0 {
+	if !(g.Alpha > 0) || math.IsInf(g.Alpha, 0) || !(g.Beta > 0) || math.IsInf(g.Beta, 0) || !(x >= 0) || math.IsInf(x, 1) {
 		return math.Inf(-1)
 	}
 	if x == 0 {
@@ -35,8 +35,8 @@ func (g Gamma) LogProb(x float64) float64 {
 func (g Gamma) Sample() float64 {
 	alpha := g.Alpha
 	beta := g.Beta
-	if alpha <= 0 || beta <= 0 {
-		panic("gamma parameters must be positive")
+	if !(alpha > 0) || math.IsInf(alpha, 0) || !(beta > 0) || math.IsInf(beta, 0) {
+		panic("gamma parameters must be finite and positive")
 	}
 	if alpha < 1 {
 		x := Gamma{Alpha: alpha + 1, Beta: beta}.Sample()

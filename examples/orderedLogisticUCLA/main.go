@@ -417,9 +417,22 @@ func main() {
 		{1, 0, 0, 3.26},
 		{2, 0, 0, 3.52},
 	}
-	// GPA is centered at 3.
-	// Priors are on these centered/scaled coordinates, identically in JAGS.
-	// Positive gap enforces c2 > c1; no separate intercept is estimated.
+	type groupedRow struct {
+		Y, X1, X2, X3 float64
+		Count         int
+	}
+	grouped := []groupedRow{}
+	indices := make(map[[4]float64]int)
+	for _, row := range data {
+		row.X3 -= 3
+		key := [4]float64{row.Y, row.X1, row.X2, row.X3}
+		if i, ok := indices[key]; ok {
+			grouped[i].Count++
+		} else {
+			indices[key] = len(grouped)
+			grouped = append(grouped, groupedRow{row.Y, row.X1, row.X2, row.X3, 1})
+		}
+	}
 	m := &model.Model{
 		Variables: []*variable.Variable{
 			{Name: "b1", Value: 0, Prior: distributions.Normal{Mu: 0, Sigma: 2}, ProposalScale: 0.2},
@@ -430,10 +443,11 @@ func main() {
 		},
 		LogLik: func(params map[string]float64) float64 {
 			cuts := []float64{params["c1"], params["c1"] + params["gap"]}
+			b1, b2, b3 := params["b1"], params["b2"], params["b3"]
 			var lp float64
-			for _, row := range data {
-				eta := params["b1"]*row.X1 + params["b2"]*row.X2 + params["b3"]*(row.X3-3)
-				lp += (distributions.OrderedLogistic{Eta: eta, Cutpoints: cuts}).LogProb(row.Y)
+			for _, row := range grouped {
+				eta := b1*row.X1 + b2*row.X2 + b3*row.X3
+				lp += float64(row.Count) * (distributions.OrderedLogistic{Eta: eta, Cutpoints: cuts}).LogProb(row.Y)
 			}
 			return lp
 		},

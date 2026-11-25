@@ -1,10 +1,11 @@
 package model
 
 import (
+	"math"
+
 	"github.com/mrtkp9993/gobayes/diagnostics"
 	"github.com/mrtkp9993/gobayes/distributions"
 	"github.com/mrtkp9993/gobayes/random"
-	"math"
 )
 
 func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, curr Proposal) error {
@@ -14,6 +15,7 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 		r.Draws[c][i] = backing[i*o.Iterations : (i+1)*o.Iterations : (i+1)*o.Iterations]
 	}
 	proposal := Proposal{Params: make(map[string]float64, len(m.Variables))}
+	var currentPriors, proposedPriors []float64
 	r.Scales[c] = make([]float64, len(m.Variables))
 	for i, v := range m.Variables {
 		r.Scales[c][i] = v.ProposalScale
@@ -23,11 +25,37 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 	}
 	if o.Componentwise {
 		r.Diagnostics.Components[c] = make([]diagnostics.ChainDiagnostics, len(m.Variables))
+		currentPriors = make([]float64, len(m.Variables))
+		proposedPriors = make([]float64, len(m.Variables))
+		for i, v := range m.Variables {
+			currentPriors[i] = v.Prior.LogProb(curr.Params[v.Name])
+		}
 	}
 	for step := 0; step < o.BurnIn+o.Iterations*o.Thin; step++ {
 		if o.Componentwise {
 			for i := range m.Variables {
-				m.proposeComponent(curr, rng, r.Scales[c][i], i, &proposal)
+				for name, value := range curr.Params {
+					proposal.Params[name] = value
+				}
+				v := m.Variables[i]
+				old := curr.Params[v.Name]
+				var value float64
+				proposal.LogPrior, proposal.LogLik, proposal.LogQRatio = 0, 0, 0
+				if _, discrete := v.Prior.(distributions.DiscreteDistribution); discrete {
+					value = proposeDiscrete(old, r.Scales[c][i], rng)
+				} else {
+					value, proposal.LogQRatio = proposeContinuous(old, r.Scales[c][i], v.Multiplicative, rng)
+				}
+				proposal.Params[v.Name] = value
+				if math.IsNaN(value) || math.IsInf(value, 0) {
+					proposal.LogPrior = math.Inf(-1)
+				} else {
+					copy(proposedPriors, currentPriors)
+					proposedPriors[i] = v.Prior.LogProb(value)
+					for _, lp := range proposedPriors {
+						proposal.LogPrior += lp
+					}
+				}
 				accepted := m.accept(&proposal, curr, rng)
 				if step >= o.BurnIn {
 					d := &r.Diagnostics.Chains[c]
@@ -41,6 +69,7 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 				}
 				if accepted {
 					curr, proposal = proposal, curr
+					currentPriors, proposedPriors = proposedPriors, currentPriors
 				}
 				_, discrete := m.Variables[i].Prior.(distributions.DiscreteDistribution)
 				if o.Adapt && step < o.BurnIn && !discrete {
