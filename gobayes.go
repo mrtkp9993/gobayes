@@ -20,6 +20,8 @@ type (
 	Binomial               = distributions.Binomial
 	NegativeBinomial       = distributions.NegativeBinomial
 	Categorical            = distributions.Categorical
+	OrderedLogistic        = distributions.OrderedLogistic
+	OrderedProbit          = distributions.OrderedProbit
 	Exponential            = distributions.Exponential
 	Gamma                  = distributions.Gamma
 	Normal                 = distributions.Normal

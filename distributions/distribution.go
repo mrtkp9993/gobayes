@@ -25,4 +25,6 @@ var (
 	_ DiscreteDistribution   = Poisson{}
 	_ DiscreteDistribution   = NegativeBinomial{}
 	_ DiscreteDistribution   = Categorical{}
+	_ DiscreteDistribution   = OrderedLogistic{}
+	_ DiscreteDistribution   = OrderedProbit{}
 )
