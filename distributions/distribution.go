@@ -24,4 +24,5 @@ var (
 	_ DiscreteDistribution   = Bernoulli{}
 	_ DiscreteDistribution   = Poisson{}
 	_ DiscreteDistribution   = NegativeBinomial{}
+	_ DiscreteDistribution   = Categorical{}
 )
