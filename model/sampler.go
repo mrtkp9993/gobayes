@@ -142,7 +142,7 @@ func proposeDiscrete(value, scale float64, rng *random.Generator) float64 {
 	return value + step
 }
 
-func (m *Model) accept(p *Proposal, curr Proposal, rng *random.Generator) bool {
+func (m *Model) accept(p *Proposal, curr Proposal, deltaLogPrior float64, rng *random.Generator) bool {
 	if math.IsInf(p.LogPrior, -1) {
 		return false
 	}
@@ -156,7 +156,7 @@ func (m *Model) accept(p *Proposal, curr Proposal, rng *random.Generator) bool {
 	if math.IsInf(p.LogLik, -1) {
 		return false
 	}
-	logA := p.LogPosterior() - curr.LogPosterior() + p.LogQRatio
+	logA := (p.LogLik - curr.LogLik) + deltaLogPrior + p.LogQRatio
 	if math.IsNaN(logA) {
 		return false
 	}

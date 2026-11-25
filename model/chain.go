@@ -56,7 +56,8 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 						proposal.LogPrior += lp
 					}
 				}
-				accepted := m.accept(&proposal, curr, rng)
+				deltaLogPrior := proposedPriors[i] - currentPriors[i]
+				accepted := m.accept(&proposal, curr, deltaLogPrior, rng)
 				if step >= o.BurnIn {
 					d := &r.Diagnostics.Chains[c]
 					component := &r.Diagnostics.Components[c][i]
@@ -78,7 +79,8 @@ func (m *Model) runChain(o Options, rng *random.Generator, r *Result, c int, cur
 			}
 		} else {
 			m.proposeWithScales(curr, rng, r.Scales[c], &proposal)
-			acceptedProposal := m.accept(&proposal, curr, rng)
+			deltaLogPrior := proposal.LogPrior - curr.LogPrior
+			acceptedProposal := m.accept(&proposal, curr, deltaLogPrior, rng)
 			if step >= o.BurnIn {
 				d := &r.Diagnostics.Chains[c]
 				d.Proposed++

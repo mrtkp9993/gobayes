@@ -312,7 +312,7 @@ func TestDiscreteRandomWalkRejectsOutsideSupport(t *testing.T) {
 			}
 			if proposal.Params["k"] < 0 || proposal.Params["k"] > 1 {
 				outside++
-				if m.accept(&proposal, current, rng) {
+				if m.accept(&proposal, current, proposal.LogPrior-current.LogPrior, rng) {
 					t.Fatal("accepted a proposal outside the prior support")
 				}
 			}
