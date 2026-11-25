@@ -28,6 +28,23 @@ func (g Gamma) LogProb(x float64) float64 {
 		}
 	}
 
+	if g.Alpha >= 16 {
+		d := math.FMA(g.Beta, x, -g.Alpha) / g.Alpha
+		if math.Abs(d) <= 0.1 {
+			// Evaluate log1p(d)-d as a series to avoid cancellation near the mean.
+			term := -0.5 * d * d
+			log1pmx := term
+			for k := 3.0; ; k++ {
+				term *= -d * (k - 1) / k
+				next := log1pmx + term
+				if next == log1pmx {
+					break
+				}
+				log1pmx = next
+			}
+			return math.Log(g.Beta) - 0.5*math.Log(2*math.Pi) - 0.5*math.Log(g.Alpha) - stirlingError(g.Alpha) + g.Alpha*log1pmx - math.Log1p(d)
+		}
+	}
 	lgamma, _ := math.Lgamma(g.Alpha)
 	return (g.Alpha-1)*math.Log(x) - g.Beta*x + g.Alpha*math.Log(g.Beta) - lgamma
 }

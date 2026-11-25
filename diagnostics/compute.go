@@ -19,6 +19,7 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		centered = make([][]float64, m)
 	}
 	var grand, w float64
+	anyChainVaries := false
 	for c, xs := range chains {
 		if len(xs) != n {
 			return result, errors.New("chains must have equal lengths")
@@ -26,6 +27,9 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		for _, x := range xs {
 			if math.IsNaN(x) || math.IsInf(x, 0) {
 				return result, errors.New("draws must be finite")
+			}
+			if x != xs[0] {
+				anyChainVaries = true
 			}
 			means[c] += x / float64(n)
 		}
@@ -42,8 +46,11 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 		}
 		w += vars[c] / float64(m)
 	}
-	if w == 0 {
+	if !anyChainVaries {
 		return result, errors.New("ESS, MCSE and R-hat are unavailable because all chains have constant draws")
+	}
+	if w == 0 {
+		return result, errors.New("within-chain variance is numerically zero")
 	}
 	if w < 0 || math.IsInf(w, 0) || math.IsNaN(w) {
 		return result, errors.New("within-chain variance must be finite and positive")
@@ -82,7 +89,13 @@ func Compute(chains [][]float64) (ParameterDiagnostics, error) {
 			}
 			cov += sum / float64(n*m)
 		}
-		result.Autocorrelation = append(result.Autocorrelation, 1-(w-cov)/varPlus)
+		var rho float64
+		if m == 1 {
+			rho = cov / varPlus
+		} else {
+			rho = 1 - (w-cov)/varPlus
+		}
+		result.Autocorrelation = append(result.Autocorrelation, rho)
 		if lag%2 == 1 && result.Autocorrelation[lag-1]+result.Autocorrelation[lag] <= 0 {
 			break
 		}

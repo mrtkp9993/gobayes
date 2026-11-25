@@ -47,6 +47,27 @@ func TestGammaLogProbInvalidParams(t *testing.T) {
 	}
 }
 
+func TestGammaLogProbLargeShapeNearMean(t *testing.T) {
+	// mpmath, 100 decimal digits, exact float64 inputs.
+	for _, tc := range []struct {
+		alpha, beta, x, want float64
+	}{
+		{1e16, 1, 1e16, -19.339619277157038222},
+		{1e16, 1, 1e16 - 1e8, -19.839619270490371531},
+		{1e16, 1, 1e16 + 1e8, -19.839619283823704864},
+		{1e16, 1.1, 9090909181818182, -19.744309114093729325},
+		{16, 2, 7.2, -1.5977011045516221952},
+		{16, 2, 8, -1.6172933696842276916},
+		{16, 2, 8.8, -1.7876406726193550009},
+	} {
+		d := Gamma{Alpha: tc.alpha, Beta: tc.beta}
+		got := d.LogProb(tc.x)
+		if math.IsNaN(got) || math.IsInf(got, 0) || math.Abs(got-tc.want) > 1e-12 {
+			t.Errorf("%+v x=%g: got %.17g, want %.17g", d, tc.x, got, tc.want)
+		}
+	}
+}
+
 func TestGammaSample(t *testing.T) {
 	cases := []struct {
 		d           Gamma

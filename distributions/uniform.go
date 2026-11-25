@@ -15,7 +15,7 @@ func (Uniform) IsContinuous() {}
 
 // https://numpy.org/doc/stable/reference/random/generated/numpy.random.Generator.uniform.html
 func (u Uniform) LogProb(x float64) float64 {
-	if u.B <= u.A || x < u.A || x > u.B {
+	if !(u.A < u.B) || math.IsInf(u.A, 0) || math.IsInf(u.B, 0) || !(x >= u.A && x <= u.B) {
 		return math.Inf(-1)
 	}
 	width := u.B - u.A
@@ -26,8 +26,8 @@ func (u Uniform) LogProb(x float64) float64 {
 }
 
 func (u Uniform) Sample() float64 {
-	if u.B <= u.A {
-		panic("uniform requires A < B")
+	if !(u.A < u.B) || math.IsInf(u.A, 0) || math.IsInf(u.B, 0) {
+		panic("uniform requires finite A < B")
 	}
 	draw := random.Float64()
 	width := u.B - u.A

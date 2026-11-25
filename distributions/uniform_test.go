@@ -14,6 +14,7 @@ func TestUniformLogProb(t *testing.T) {
 			{Name: "x=0.3", X: 0.3, Want: 0.0},
 			{Name: "x<A", X: -0.1, Want: math.Inf(-1)},
 			{Name: "x>B", X: 1.1, Want: math.Inf(-1)},
+			{Name: "NaN observation", X: math.NaN(), Want: math.Inf(-1)},
 		})
 	})
 	t.Run("A=-3,B=2", func(t *testing.T) {
@@ -30,7 +31,7 @@ func TestUniformLogProb(t *testing.T) {
 }
 
 func TestUniformLogProbInvalidParams(t *testing.T) {
-	for _, p := range []Uniform{{1, 1}, {3, 1}} {
+	for _, p := range []Uniform{{1, 1}, {3, 1}, {math.NaN(), 1}, {0, math.NaN()}, {math.Inf(-1), 1}, {0, math.Inf(1)}} {
 		t.Run(fmt.Sprintf("A=%v,B=%v", p.A, p.B), func(t *testing.T) {
 			for _, x := range []float64{1, 2} {
 				disttest.AssertClose(t, p.LogProb(x), math.Inf(-1), fmt.Sprintf("x=%v", x))
@@ -107,7 +108,7 @@ func TestUniformIntegratesToOne(t *testing.T) {
 }
 
 func TestUniformSampleInvalidParamsPanics(t *testing.T) {
-	for _, p := range []Uniform{{1, 1}, {3, 1}} {
+	for _, p := range []Uniform{{1, 1}, {3, 1}, {math.NaN(), 1}, {0, math.NaN()}, {math.Inf(-1), 1}, {0, math.Inf(1)}} {
 		disttest.AssertPanics(t, func() { p.Sample() }, fmt.Sprintf("A=%v,B=%v", p.A, p.B))
 	}
 }

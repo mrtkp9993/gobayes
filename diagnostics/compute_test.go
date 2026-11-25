@@ -159,10 +159,40 @@ func TestComputeConstantChains(t *testing.T) {
 	for _, chains := range [][][]float64{
 		{{0, 0, 0, 0}, {0, 0, 0, 0}},
 		{{0, 0, 0, 0}, {1, 1, 1, 1}},
+		{{0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1}},
+		{{0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1}, {0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2}},
 	} {
 		_, err := Compute(chains)
 		if err == nil || !strings.Contains(err.Error(), "ESS, MCSE and R-hat are unavailable") {
 			t.Fatalf("expected explicit unavailable diagnostics, got %v", err)
 		}
+	}
+}
+
+func TestComputeSingleChainACF(t *testing.T) {
+	d, err := Compute([][]float64{{-1, 1, -1, 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.Autocorrelation[1] != -0.75 {
+		t.Fatalf("lag 1 ACF = %g, want -0.75", d.Autocorrelation[1])
+	}
+	if d.ESS != 4 || d.MCSEMean != 0.5 || d.RHat != nil {
+		t.Fatalf("unexpected single-chain diagnostics: %+v", d)
+	}
+	// Nontrivial positive correlation also uses the corrected ACF in ESS.
+	d, err = Compute([][]float64{{1, 2, 3, 4, 5}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(d.ESS-5.0/1.8) > 1e-14 || math.Abs(d.MCSEMean-math.Sqrt(0.72)) > 1e-14 {
+		t.Fatalf("ESS/MCSE did not use the corrected ACF: %+v", d)
+	}
+}
+
+func TestComputeVarianceUnderflow(t *testing.T) {
+	_, err := Compute([][]float64{{0, 1e-200, 0, 1e-200}})
+	if err == nil || !strings.Contains(err.Error(), "numerically zero") {
+		t.Fatalf("expected numerical variance error, got %v", err)
 	}
 }
