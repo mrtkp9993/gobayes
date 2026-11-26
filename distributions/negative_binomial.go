@@ -69,6 +69,7 @@ func (n NegativeBinomial) Sample() float64 {
 	if n.P == 1 {
 		return 0
 	}
-	lambda := (Gamma{Alpha: n.R, Beta: 1}).Sample() * (1 - n.P) / n.P
+	rate := n.P / (1 - n.P)
+	lambda := (Gamma{Alpha: n.R, Beta: rate}).Sample()
 	return (Poisson{Lambda: lambda}).Sample()
 }

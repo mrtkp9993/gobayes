@@ -9,6 +9,7 @@ import (
 )
 
 func TestPoissonLogProb(t *testing.T) {
+	disttest.AssertClose(t, (Poisson{Lambda: math.SmallestNonzeroFloat64}).LogProb(1), -1074*math.Ln2, "subnormal mean")
 	disttest.RunLogProbCases(t, Poisson{Lambda: 3}, []disttest.LogProbCase{
 		{Name: "zero", X: 0, Want: -3},
 		{Name: "one", X: 1, Want: math.Log(3) - 3},

@@ -3,6 +3,7 @@ package distributions
 import (
 	"math"
 
+	"github.com/mrtkp9993/gobayes/internal/utils"
 	"github.com/mrtkp9993/gobayes/random"
 )
 
@@ -31,7 +32,7 @@ func (b Binomial) LogProb(x float64) float64 {
 	case x == 0:
 		return n * math.Log1p(-b.P)
 	case x == n:
-		return n * math.Log(b.P)
+		return n * utils.LogPositive(b.P)
 	}
 
 	y := n - x
@@ -54,7 +55,7 @@ func stirlingError(n float64) float64 {
 func binomialDeviance(x, mean float64) float64 {
 	difference := x - mean
 	if math.Abs(difference) >= 0.1*(x+mean) {
-		return x*(math.Log(x)-math.Log(mean)) - difference
+		return x*(utils.LogPositive(x)-utils.LogPositive(mean)) - difference
 	}
 
 	v := difference / (x + mean)
@@ -80,18 +81,59 @@ func (b Binomial) Sample() float64 {
 	if b.P == 1 {
 		return float64(b.N)
 	}
-	logMiss := math.Log1p(-min(b.P, 1-b.P))
+	p := min(b.P, 1-b.P)
+	nf := float64(b.N)
+	mean := nf * p
 	count := 0
-	for remaining := b.N; remaining > 0; {
-		skipped := math.Floor(math.Log(random.Float64()) / logMiss)
-		if skipped >= float64(remaining) {
-			break
+
+	if mean < 30 {
+		logMiss := math.Log1p(-p)
+		for remaining := b.N; remaining > 0; {
+			skipped := math.Floor(math.Log(random.Float64()) / logMiss)
+			if skipped >= float64(remaining) {
+				break
+			}
+			remaining -= int(skipped) + 1
+			count++
 		}
-		remaining -= int(skipped) + 1
-		count++
+	} else {
+		center := int(math.Floor(mean))
+		fraction := math.FMA(nf, p, -float64(center))
+		mode := center + int(math.Floor(fraction+p))
+
+		sd := math.Sqrt(mean * (1 - p))
+		width := 1.15 + 2.53*sd
+		a := -0.0873 + 0.0248*width + 0.01*p
+		alpha := (2.83 + 5.1/width) * sd
+
+		target := Binomial{N: b.N, P: p}
+		logMode := target.LogProb(float64(mode))
+		logAlpha := math.Log(alpha)
+
+		for {
+			u := random.Float64() - 0.5
+			us := 0.5 - math.Abs(u)
+			if us == 0 {
+				continue
+			}
+
+			offset := math.Floor((2*a/us+width)*u + (fraction + 0.5))
+			if offset < -float64(center) || offset > float64(b.N-center) {
+				continue
+			}
+
+			candidate := center + int(offset)
+			v := random.Float64()
+			logV := math.Log(v) + logAlpha - math.Log(a/(us*us)+width)
+			if logV <= target.LogProb(float64(candidate))-logMode {
+				count = candidate
+				break
+			}
+		}
 	}
+
 	if b.P > 0.5 {
-		return float64(b.N - count)
+		count = b.N - count
 	}
 	return float64(count)
 }

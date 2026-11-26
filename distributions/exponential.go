@@ -3,6 +3,7 @@ package distributions
 import (
 	"math"
 
+	"github.com/mrtkp9993/gobayes/internal/utils"
 	"github.com/mrtkp9993/gobayes/random"
 )
 
@@ -16,7 +17,7 @@ func (e Exponential) LogProb(x float64) float64 {
 	if e.Lambda <= 0 || x < 0 {
 		return math.Inf(-1)
 	}
-	return math.Log(e.Lambda) - e.Lambda*x
+	return utils.LogPositive(e.Lambda) - e.Lambda*x
 }
 
 func (e Exponential) Sample() float64 {

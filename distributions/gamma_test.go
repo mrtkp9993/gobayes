@@ -6,9 +6,32 @@ import (
 	"testing"
 
 	"github.com/mrtkp9993/gobayes/internal/disttest"
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 func TestGammaLogProb(t *testing.T) {
+	t.Run("extreme finite parameters", func(t *testing.T) {
+		tiny := math.SmallestNonzeroFloat64
+		logTiny := -1074 * math.Ln2
+		logFactorial := 0.0
+		for k := 2; k <= 15; k++ {
+			logFactorial += math.Log(float64(k))
+		}
+		for _, tc := range []struct {
+			d       Gamma
+			x, want float64
+		}{
+			{Gamma{1, tiny}, 0, logTiny},
+			{Gamma{tiny, 1}, 1, logTiny - 1},
+			{Gamma{16, tiny}, tiny, 31*logTiny - logFactorial},
+			{Gamma{1e308, 1e308}, 2, (math.Ln2 - 1) * 1e308},
+		} {
+			got := tc.d.LogProb(tc.x)
+			if math.IsNaN(got) || math.IsInf(got, 0) || math.Abs(got-tc.want) > 1e-13*math.Max(1, math.Abs(tc.want)) {
+				t.Errorf("%+v x=%g: got %g, want %g", tc.d, tc.x, got, tc.want)
+			}
+		}
+	})
 	t.Run("alpha=3,beta=2", func(t *testing.T) {
 		disttest.RunLogProbCases(t, Gamma{Alpha: 3, Beta: 2}, []disttest.LogProbCase{
 			{Name: "x=2", X: 2, Want: -1.2274112777602189},
@@ -69,6 +92,26 @@ func TestGammaLogProbLargeShapeNearMean(t *testing.T) {
 }
 
 func TestGammaSample(t *testing.T) {
+	const draws = 200
+	random.Seed(42)
+	unit := make([]float64, draws)
+	for i := range unit {
+		unit[i] = (Gamma{Alpha: 0.001, Beta: 1}).Sample()
+	}
+	random.Seed(42)
+	recovered := 0
+	for _, unscaled := range unit {
+		scaled := (Gamma{Alpha: 0.001, Beta: 1e-310}).Sample()
+		if math.IsNaN(scaled) || scaled < 0 {
+			t.Fatalf("invalid scaled draw: %g", scaled)
+		}
+		if unscaled == 0 && scaled > 0 && !math.IsInf(scaled, 0) {
+			recovered++
+		}
+	}
+	if recovered == 0 {
+		t.Fatal("expected finite scaled draws recovered from unit-rate underflow")
+	}
 	cases := []struct {
 		d           Gamma
 		median, mad float64

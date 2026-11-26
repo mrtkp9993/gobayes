@@ -9,6 +9,7 @@ import (
 )
 
 func TestExponentialLogProb(t *testing.T) {
+	disttest.AssertClose(t, (Exponential{Lambda: math.SmallestNonzeroFloat64}).LogProb(0), -1074*math.Ln2, "subnormal rate")
 	t.Run("lambda=2", func(t *testing.T) {
 		disttest.RunLogProbCases(t, Exponential{Lambda: 2}, []disttest.LogProbCase{
 			{Name: "x=0 (support boundary)", X: 0, Want: 0.6931471805599453},

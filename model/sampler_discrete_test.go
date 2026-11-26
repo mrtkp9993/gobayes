@@ -323,6 +323,32 @@ func TestDiscreteRandomWalkRejectsOutsideSupport(t *testing.T) {
 	}
 }
 
+func TestAcceptPreservesPriorDifferenceWithLargeLogLikelihood(t *testing.T) {
+	m := &Model{
+		LogLik: func(map[string]float64) float64 { return -1e20 },
+	}
+	curr := Proposal{LogLik: -1e20, LogPrior: -1}
+	proposed := Proposal{LogPrior: -2}
+
+	rng := random.New(42, 0)
+	reference := random.New(42, 0)
+	rejections := 0
+
+	for range 64 {
+		want := math.Log(reference.Float64()) < -1
+		got := m.accept(&proposed, curr, -1, rng)
+		if got != want {
+			t.Fatalf("MH kabul kararı %v, beklenen %v (logA=-1)", got, want)
+		}
+		if !got {
+			rejections++
+		}
+	}
+	if rejections == 0 {
+		t.Fatal("test dizisinde beklenen ret kararı oluşmadı")
+	}
+}
+
 func TestDiscreteRandomWalkIntegerBoundary(t *testing.T) {
 	const limit = 1 << 53
 	rng := random.New(42, 0)

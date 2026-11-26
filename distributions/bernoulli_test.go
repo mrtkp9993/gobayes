@@ -9,6 +9,7 @@ import (
 )
 
 func TestBernoulliLogProb(t *testing.T) {
+	disttest.AssertClose(t, (Bernoulli{P: math.SmallestNonzeroFloat64}).LogProb(1), -1074*math.Ln2, "subnormal P")
 	disttest.RunLogProbCases(t, Bernoulli{P: 0.25}, []disttest.LogProbCase{
 		{Name: "failure", X: 0, Want: math.Log(0.75)},
 		{Name: "success", X: 1, Want: math.Log(0.25)},

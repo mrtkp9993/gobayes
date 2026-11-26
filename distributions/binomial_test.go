@@ -1,13 +1,16 @@
 package distributions
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
 	"github.com/mrtkp9993/gobayes/internal/disttest"
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 func TestBinomialLogProb(t *testing.T) {
+	disttest.AssertClose(t, (Binomial{N: 1, P: math.SmallestNonzeroFloat64}).LogProb(1), -1074*math.Ln2, "subnormal P")
 	disttest.RunLogProbCases(t, Binomial{N: 4, P: 0.25}, []disttest.LogProbCase{
 		{Name: "zero successes", X: 0, Want: math.Log(81.0 / 256)},
 		{Name: "two successes", X: 2, Want: math.Log(54.0 / 256)},
@@ -55,6 +58,7 @@ func TestBinomialInvalidParameters(t *testing.T) {
 }
 
 func TestBinomialSample(t *testing.T) {
+	random.Seed(20261126)
 	const draws = 20_000
 	const n = 4
 	d := Binomial{N: n, P: 0.75}
@@ -72,5 +76,87 @@ func TestBinomialSample(t *testing.T) {
 		if math.Abs(frequency-prob) > disttest.SETol*se {
 			t.Errorf("frequency for %d = %.5f, want %.5f", k, frequency, prob)
 		}
+	}
+	for _, d := range []Binomial{{100, 0.1}, {100, 0.2}, {100, 0.2999}, {100, 0.3}, {100, 0.5}, {200, 0.5}, {100, 0.7}, {1000, 0.03}} {
+		t.Run(fmt.Sprintf("N=%d/P=%g", d.N, d.P), func(t *testing.T) {
+			const draws = 100_000
+			counts := make([]int, d.N+1)
+			for range draws {
+				x := d.Sample()
+				if x < 0 || x > float64(d.N) || math.Trunc(x) != x {
+					t.Fatalf("sample outside support: %g", x)
+				}
+				counts[int(x)]++
+			}
+			mass := math.Pow(1-d.P, float64(d.N))
+			mean := float64(d.N) * d.P
+			sd := math.Sqrt(mean * (1 - d.P))
+			var tailMass [2]float64
+			var tailCount [2]int
+			for k, count := range counts {
+				if math.Abs(float64(count)/draws-mass) > 6*math.Sqrt(mass*(1-mass)/draws)+2.0/draws {
+					t.Errorf("mass at %d: got %g, want %g", k, float64(count)/draws, mass)
+				}
+				for tail, outside := range []bool{float64(k) <= mean-2*sd, float64(k) >= mean+2*sd} {
+					if outside {
+						tailMass[tail] += mass
+						tailCount[tail] += count
+					}
+				}
+				mass *= float64(d.N-k) / float64(k+1) * d.P / (1 - d.P)
+			}
+			for tail, want := range tailMass {
+				if math.Abs(float64(tailCount[tail])/draws-want) > 6*math.Sqrt(want*(1-want)/draws) {
+					t.Errorf("tail %d: got %g, want %g", tail, float64(tailCount[tail])/draws, want)
+				}
+			}
+		})
+	}
+	for _, p := range []float64{0.5, 0.25, 0.75, 30.0 / (1 << 53), 1 - 0x1p-48} {
+		d := Binomial{N: 1 << 53, P: p}
+		const draws = 20_000
+		mean := float64(d.N) * p
+		variance := mean * (1 - p)
+		var sum, squares float64
+		for range draws {
+			x := d.Sample()
+			if x < 0 || x > float64(d.N) || math.Trunc(x) != x {
+				t.Fatalf("P=%g: sample outside support: %g", p, x)
+			}
+			delta := x - mean
+			sum += delta
+			squares += delta * delta
+		}
+		if math.Abs(sum/draws) > 6*math.Sqrt(variance/draws) {
+			t.Errorf("P=%g: centered mean %g", p, sum/draws)
+		}
+		if math.Abs(squares/draws-variance) > 6*math.Sqrt((2*variance*variance+variance)/draws) {
+			t.Errorf("P=%g: centered second moment %g, want %g", p, squares/draws, variance)
+		}
+	}
+}
+
+func BenchmarkBinomialSample(b *testing.B) {
+	for _, mean := range []float64{10, 20, 30, 50, 100} {
+		d := Binomial{N: 1000, P: mean / 1000}
+		b.Run(fmt.Sprintf("mean=%g/hybrid", mean), func(b *testing.B) {
+			random.Seed(42)
+			for b.Loop() {
+				d.Sample()
+			}
+		})
+		b.Run(fmt.Sprintf("mean=%g/geometric", mean), func(b *testing.B) {
+			random.Seed(42)
+			logMiss := math.Log1p(-d.P)
+			for b.Loop() {
+				for remaining := d.N; remaining > 0; {
+					skipped := math.Floor(math.Log(random.Float64()) / logMiss)
+					if skipped >= float64(remaining) {
+						break
+					}
+					remaining -= int(skipped) + 1
+				}
+			}
+		})
 	}
 }

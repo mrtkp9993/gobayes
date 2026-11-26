@@ -3,6 +3,7 @@ package distributions
 import (
 	"math"
 
+	"github.com/mrtkp9993/gobayes/internal/utils"
 	"github.com/mrtkp9993/gobayes/random"
 )
 
@@ -24,7 +25,7 @@ func (b Bernoulli) LogProb(x float64) float64 {
 	case 0:
 		return math.Log1p(-b.P)
 	case 1:
-		return math.Log(b.P)
+		return utils.LogPositive(b.P)
 	default:
 		return math.Inf(-1)
 	}

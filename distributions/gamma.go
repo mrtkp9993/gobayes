@@ -3,6 +3,7 @@ package distributions
 import (
 	"math"
 
+	"github.com/mrtkp9993/gobayes/internal/utils"
 	"github.com/mrtkp9993/gobayes/random"
 )
 
@@ -22,31 +23,61 @@ func (g Gamma) LogProb(x float64) float64 {
 		case g.Alpha < 1:
 			return math.Inf(1)
 		case g.Alpha == 1:
-			return math.Log(g.Beta)
+			return utils.LogPositive(g.Beta)
 		default:
 			return math.Inf(-1)
 		}
 	}
 
 	if g.Alpha >= 16 {
+		base := 0.5*math.Log(g.Alpha) - utils.LogPositive(x) -
+			0.5*math.Log(2*math.Pi) - stirlingError(g.Alpha)
+
 		d := math.FMA(g.Beta, x, -g.Alpha) / g.Alpha
 		if math.Abs(d) <= 0.1 {
-			// Evaluate log1p(d)-d as a series to avoid cancellation near the mean.
 			term := -0.5 * d * d
-			log1pmx := term
+			sum := term
 			for k := 3.0; ; k++ {
 				term *= -d * (k - 1) / k
-				next := log1pmx + term
-				if next == log1pmx {
+				next := sum + term
+				if next == sum {
 					break
 				}
-				log1pmx = next
+				sum = next
 			}
-			return math.Log(g.Beta) - 0.5*math.Log(2*math.Pi) - 0.5*math.Log(g.Alpha) - stirlingError(g.Alpha) + g.Alpha*log1pmx - math.Log1p(d)
+			return math.FMA(g.Alpha, sum, base)
 		}
+
+		mb, eb := math.Frexp(g.Beta)
+		mx, ex := math.Frexp(x)
+		ma, ea := math.Frexp(g.Alpha)
+		mantissa := mb * mx / ma
+		exponent := eb + ex - ea
+
+		r := math.Ldexp(mantissa, exponent)
+		if math.IsInf(r, 1) {
+			return math.Inf(-1)
+		}
+
+		var logR float64
+		if r >= 0x1p-1022 {
+			logR = math.Log(r)
+		} else {
+			logR = math.Log(mantissa) + float64(exponent)*math.Ln2
+		}
+		return math.FMA(g.Alpha, logR-(r-1), base)
 	}
-	lgamma, _ := math.Lgamma(g.Alpha)
-	return (g.Alpha-1)*math.Log(x) - g.Beta*x + g.Alpha*math.Log(g.Beta) - lgamma
+
+	var lgamma float64
+	if g.Alpha < 0.5 {
+		lgamma, _ = math.Lgamma(1 + g.Alpha)
+		lgamma -= utils.LogPositive(g.Alpha)
+	} else {
+		lgamma, _ = math.Lgamma(g.Alpha)
+	}
+
+	return (g.Alpha-1)*utils.LogPositive(x) +
+		g.Alpha*utils.LogPositive(g.Beta) - g.Beta*x - lgamma
 }
 
 func (g Gamma) Sample() float64 {
@@ -56,9 +87,25 @@ func (g Gamma) Sample() float64 {
 		panic("gamma parameters must be finite and positive")
 	}
 	if alpha < 1 {
-		x := Gamma{Alpha: alpha + 1, Beta: beta}.Sample()
+		y := Gamma{Alpha: alpha + 1, Beta: 1}.Sample()
 		u := random.Float64()
-		return x * math.Pow(u, 1/alpha)
+		if u == 0 {
+			return 0
+		}
+
+		logX := math.Log(y) + utils.LogPositive(u)/alpha -
+			utils.LogPositive(beta)
+
+		if logX < -746 {
+			return 0
+		}
+		if logX > 710 {
+			return math.Inf(1)
+		}
+
+		k := int(math.Round(logX / math.Ln2))
+		remainder := math.FMA(-float64(k), math.Ln2, logX)
+		return math.Ldexp(math.Exp(remainder), k)
 	}
 
 	d := alpha - 1.0/3.0
