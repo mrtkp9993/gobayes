@@ -26,7 +26,7 @@ func TestExponentialLogProb(t *testing.T) {
 }
 
 func TestExponentialLogProbInvalidParams(t *testing.T) {
-	for _, lambda := range []float64{0, -1} {
+	for _, lambda := range []float64{0, -1, math.NaN(), math.Inf(1)} {
 		d := Exponential{Lambda: lambda}
 		t.Run(fmt.Sprintf("lambda=%v", lambda), func(t *testing.T) {
 			disttest.AssertClose(t, d.LogProb(1), math.Inf(-1), "LogProb")
@@ -57,7 +57,7 @@ func TestExponentialIntegratesToOne(t *testing.T) {
 }
 
 func TestExponentialSampleInvalidParamsPanics(t *testing.T) {
-	for _, lambda := range []float64{0, -1} {
+	for _, lambda := range []float64{0, -1, math.NaN(), math.Inf(1)} {
 		disttest.AssertPanics(t, func() { Exponential{Lambda: lambda}.Sample() }, fmt.Sprintf("lambda=%v", lambda))
 	}
 }

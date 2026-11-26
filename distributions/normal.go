@@ -14,7 +14,7 @@ type Normal struct {
 func (Normal) IsContinuous() {}
 
 func (n Normal) LogProb(x float64) float64 {
-	if n.Sigma <= 0 {
+	if !(n.Sigma > 0) || math.IsInf(n.Sigma, 0) || math.IsNaN(n.Mu) || math.IsInf(n.Mu, 0) {
 		return math.Inf(-1)
 	}
 	delta := x - n.Mu
@@ -26,8 +26,8 @@ func (n Normal) LogProb(x float64) float64 {
 }
 
 func (n Normal) Sample() float64 {
-	if n.Sigma <= 0 {
-		panic("sigma must be positive")
+	if !(n.Sigma > 0) || math.IsInf(n.Sigma, 0) || math.IsNaN(n.Mu) || math.IsInf(n.Mu, 0) {
+		panic("normal requires finite Mu and finite positive Sigma")
 	}
-	return n.Mu + n.Sigma*random.NormFloat64()
+	return math.FMA(n.Sigma, random.NormFloat64(), n.Mu)
 }

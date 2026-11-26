@@ -71,3 +71,27 @@ func TestPoissonSample(t *testing.T) {
 		}
 	}
 }
+
+func TestPoissonSampleAtFloat64Boundary(t *testing.T) {
+	random.Seed(13)
+	const lambda = 1 << 53
+	const draws = 100_000
+	d := Poisson{Lambda: lambda}
+	var above, divisibleByFour int
+	for i := 0; i < draws; i++ {
+		x := d.Sample()
+		if x > lambda {
+			above++
+			if int64(x)%4 == 0 {
+				divisibleByFour++
+			}
+		}
+	}
+	if above == 0 {
+		t.Fatal("no samples above Lambda")
+	}
+	ratio := float64(divisibleByFour) / float64(above)
+	if math.Abs(ratio-0.75) > 0.02 {
+		t.Fatalf("fraction divisible by 4 above Lambda = %g, want 0.75 ± 0.02", ratio)
+	}
+}

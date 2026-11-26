@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mrtkp9993/gobayes/internal/disttest"
+	"github.com/mrtkp9993/gobayes/random"
 )
 
 func TestNormalLogProb(t *testing.T) {
@@ -28,7 +29,7 @@ func TestNormalLogProb(t *testing.T) {
 }
 
 func TestNormalLogProbInvalidParams(t *testing.T) {
-	for _, sigma := range []float64{0, -1} {
+	for _, sigma := range []float64{0, -1, math.NaN(), math.Inf(1)} {
 		d := Normal{Mu: 0, Sigma: sigma}
 		for _, x := range []float64{0, 1} {
 			t.Run(fmt.Sprintf("sigma=%v,x=%v", sigma, x), func(t *testing.T) {
@@ -62,6 +63,27 @@ func TestNormalLogProbExtremeScales(t *testing.T) {
 }
 
 func TestNormalSample(t *testing.T) {
+	t.Run("finite result despite overflowing product", func(t *testing.T) {
+		const seed = 13
+		random.Seed(seed)
+		for draw := 0; draw < 10_000; draw++ {
+			z := random.NormFloat64()
+			if z < 1.9 || z > 2.5 {
+				continue
+			}
+			random.Seed(seed)
+			for i := 0; i < draw; i++ {
+				random.NormFloat64()
+			}
+			got := (Normal{Mu: -1e308, Sigma: 1e308}).Sample()
+			want := (z - 1) * 1e308
+			if math.IsNaN(got) || math.IsInf(got, 0) || math.Abs(got-want)/want > 2e-15 {
+				t.Fatalf("Sample() = %g, want %g (Z=%g)", got, want, z)
+			}
+			return
+		}
+		t.Fatal("no normal draw in [1.9, 2.5]")
+	})
 	for _, d := range []Normal{{0, 1}, {-3, 0.5}, {10, 4}} {
 		t.Run(fmt.Sprintf("mu=%v,sigma=%v", d.Mu, d.Sigma), func(t *testing.T) {
 			xs := disttest.DrawSamples(t, d, disttest.NSamples, func(float64) bool { return true })
@@ -83,7 +105,12 @@ func TestNormalIntegratesToOne(t *testing.T) {
 }
 
 func TestNormalSampleInvalidParamsPanics(t *testing.T) {
-	for _, sigma := range []float64{0, -1} {
+	for _, mu := range []float64{math.NaN(), math.Inf(-1), math.Inf(1)} {
+		d := Normal{Mu: mu, Sigma: 1}
+		disttest.AssertPanics(t, func() { d.Sample() }, fmt.Sprintf("mu=%v", mu))
+		disttest.AssertClose(t, d.LogProb(0), math.Inf(-1), fmt.Sprintf("mu=%v", mu))
+	}
+	for _, sigma := range []float64{0, -1, math.NaN(), math.Inf(1)} {
 		disttest.AssertPanics(t, func() { Normal{Mu: 0, Sigma: sigma}.Sample() }, fmt.Sprintf("sigma=%v", sigma))
 	}
 }

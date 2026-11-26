@@ -52,6 +52,8 @@ func (p Poisson) Sample() float64 {
 			}
 		}
 	}
+	center := math.Floor(p.Lambda)
+	fraction := p.Lambda - center
 	root := math.Sqrt(p.Lambda)
 	b := 0.931 + 2.53*root
 	a := -0.059 + 0.02483*b
@@ -63,7 +65,7 @@ func (p Poisson) Sample() float64 {
 		if us == 0 {
 			continue
 		}
-		k := math.Floor((2*a/us+b)*u + p.Lambda + 0.43)
+		k := center + math.Floor((2*a/us+b)*u+(fraction+0.43))
 		if k < 0 {
 			continue
 		}
