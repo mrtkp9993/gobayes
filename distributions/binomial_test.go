@@ -77,7 +77,7 @@ func TestBinomialSample(t *testing.T) {
 			t.Errorf("frequency for %d = %.5f, want %.5f", k, frequency, prob)
 		}
 	}
-	for _, d := range []Binomial{{100, 0.1}, {100, 0.2}, {100, 0.2999}, {100, 0.3}, {100, 0.5}, {200, 0.5}, {100, 0.7}, {1000, 0.03}} {
+	for _, d := range []Binomial{{100, 0.1}, {100, 0.1499}, {100, 0.15}, {100, 0.2}, {100, 0.2999}, {100, 0.3}, {100, 0.5}, {200, 0.5}, {100, 0.7}, {1000, 0.03}} {
 		t.Run(fmt.Sprintf("N=%d/P=%g", d.N, d.P), func(t *testing.T) {
 			const draws = 100_000
 			counts := make([]int, d.N+1)

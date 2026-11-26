@@ -86,7 +86,7 @@ func (b Binomial) Sample() float64 {
 	mean := nf * p
 	count := 0
 
-	if mean < 30 {
+	if mean < 15 {
 		logMiss := math.Log1p(-p)
 		for remaining := b.N; remaining > 0; {
 			skipped := math.Floor(math.Log(random.Float64()) / logMiss)
