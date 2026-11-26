@@ -71,5 +71,8 @@ func (n NegativeBinomial) Sample() float64 {
 	}
 	rate := n.P / (1 - n.P)
 	lambda := (Gamma{Alpha: n.R, Beta: rate}).Sample()
+	if lambda > 1<<53 {
+		panic("negative binomial sample: mixture rate exceeds the supported Poisson limit of 2^53")
+	}
 	return (Poisson{Lambda: lambda}).Sample()
 }

@@ -137,26 +137,16 @@ func TestBinomialSample(t *testing.T) {
 }
 
 func BenchmarkBinomialSample(b *testing.B) {
-	for _, mean := range []float64{10, 20, 30, 50, 100} {
-		d := Binomial{N: 1000, P: mean / 1000}
-		b.Run(fmt.Sprintf("mean=%g/hybrid", mean), func(b *testing.B) {
-			random.Seed(42)
-			for b.Loop() {
-				d.Sample()
-			}
-		})
-		b.Run(fmt.Sprintf("mean=%g/geometric", mean), func(b *testing.B) {
-			random.Seed(42)
-			logMiss := math.Log1p(-d.P)
-			for b.Loop() {
-				for remaining := d.N; remaining > 0; {
-					skipped := math.Floor(math.Log(random.Float64()) / logMiss)
-					if skipped >= float64(remaining) {
-						break
-					}
-					remaining -= int(skipped) + 1
+	for _, n := range []int{200, 1_000, 1_000_000} {
+		for _, mean := range []float64{10, 15, 20, 25, 30, 40, 50, 100} {
+			d := Binomial{N: n, P: mean / float64(n)}
+			b.Run(fmt.Sprintf("N=%d/mean=%.0f", n, mean), func(b *testing.B) {
+				random.Seed(42)
+				b.ReportAllocs()
+				for b.Loop() {
+					d.Sample()
 				}
-			}
-		})
+			})
+		}
 	}
 }

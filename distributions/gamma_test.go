@@ -92,6 +92,29 @@ func TestGammaLogProbLargeShapeNearMean(t *testing.T) {
 }
 
 func TestGammaSample(t *testing.T) {
+	t.Run("overflow frequency at small shape and rate", func(t *testing.T) {
+		const draws = 100_000
+		const wantOverflow = 0.007469237683
+
+		random.Seed(42)
+		d := Gamma{Alpha: 0.1, Beta: 1e-308}
+		overflow := 0
+		for range draws {
+			x := d.Sample()
+			if math.IsNaN(x) || x < 0 {
+				t.Fatalf("invalid Gamma draw: %g", x)
+			}
+			if math.IsInf(x, 1) {
+				overflow++
+			}
+		}
+
+		got := float64(overflow) / draws
+		se := math.Sqrt(wantOverflow * (1 - wantOverflow) / draws)
+		if math.Abs(got-wantOverflow) > 6*se {
+			t.Fatalf("+Inf frequency = %.6f (%d/%d), want %.6f ± %.6f", got, overflow, draws, wantOverflow, 6*se)
+		}
+	})
 	const draws = 200
 	random.Seed(42)
 	unit := make([]float64, draws)

@@ -67,8 +67,18 @@ func TestNegativeBinomialInvalidAndDegenerate(t *testing.T) {
 	disttest.AssertClose(t, d.LogProb(0), 0, "certain zero")
 	disttest.AssertClose(t, d.LogProb(1), math.Inf(-1), "impossible count")
 	disttest.AssertClose(t, d.Sample(), 0, "degenerate sample")
-	random.Seed(42)
-	disttest.AssertPanics(t, func() { (NegativeBinomial{R: 1e100, P: 0.5}).Sample() }, "unrepresentable mixing rate")
+	for _, d := range []NegativeBinomial{{R: 1e100, P: 0.5}, {R: 1e100, P: math.SmallestNonzeroFloat64}} {
+		t.Run("unsupported mixture rate", func(t *testing.T) {
+			random.Seed(42)
+			defer func() {
+				const want = "negative binomial sample: mixture rate exceeds the supported Poisson limit of 2^53"
+				if got := recover(); got != want {
+					t.Fatalf("panic = %v, want %q", got, want)
+				}
+			}()
+			d.Sample()
+		})
+	}
 }
 
 func TestNegativeBinomialSample(t *testing.T) {
